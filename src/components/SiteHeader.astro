@@ -1,0 +1,88 @@
+---
+import { site } from '@/data/site';
+
+interface Props {
+  currentPath?: string;
+}
+
+const { currentPath = '/' } = Astro.props;
+
+// 主导航：站内各页面（首页由 logo 承担）
+const pageLinks = site.nav.filter((item) => item.href !== '/');
+
+// 右侧锚点：首页各分节的快速跳转
+const anchors = [
+  { href: '/#now', label: '此刻' },
+  { href: '/#chapters', label: '章节' },
+  { href: '/#toc', label: '目录' },
+  { href: '/#street', label: '扫街' },
+  { href: '/#about', label: '关于' }
+];
+
+const path = currentPath.replace(/\/+$/, '') || '/';
+const isActive = (href: string) => {
+  const h = href.replace(/\/+$/, '') || '/';
+  return h === '/' ? path === '/' : path === h || path.startsWith(`${h}/`);
+};
+---
+
+<header class="nav-v4">
+  <div class="container-page flex flex-wrap items-center gap-x-8 gap-y-3 py-4">
+    <a class="focus-ring inline-flex shrink-0 items-center gap-3" href="/" aria-label="远方有温度首页">
+      <span class="h-2.5 w-2.5 rotate-[-6deg] bg-accent"></span>
+      <strong class="font-serif text-[17px] font-semibold tracking-[0.12em] text-ink">{site.name}</strong>
+    </a>
+
+    <nav class="ml-auto hidden items-center gap-7 font-serif text-[15px] lg:flex" aria-label="站内导航">
+      {pageLinks.map((item) => (
+        <a
+          class:list={['transition hover:text-accent', isActive(item.href) ? 'text-accent' : 'text-muted']}
+          href={item.href}
+          aria-current={isActive(item.href) ? 'page' : undefined}
+        >{item.label}</a>
+      ))}
+    </nav>
+
+    <button
+      class="focus-ring ml-auto grid h-9 w-9 place-items-center rounded-[6px] border border-line bg-card text-ink lg:hidden"
+      type="button"
+      data-menu-button
+      aria-label="打开菜单"
+      aria-expanded="false"
+    >
+      <span class="flex w-4 flex-col gap-1" aria-hidden="true">
+        <span class="h-px w-full bg-ink"></span>
+        <span class="h-px w-full bg-ink"></span>
+        <span class="h-px w-full bg-ink"></span>
+      </span>
+    </button>
+  </div>
+
+  <nav class="container-page hidden pb-4 lg:hidden" data-mobile-menu aria-label="移动端导航">
+    <p class="mb-2 mt-1 font-mono text-[11px] tracking-[0.14em] text-faint">页面</p>
+    <div class="grid grid-cols-2 gap-2 font-serif text-[14px]">
+      {pageLinks.map((item) => (
+        <a
+          class:list={['rounded-[6px] bg-card px-3 py-3 hover:text-accent', isActive(item.href) ? 'text-accent' : 'text-muted']}
+          href={item.href}
+        >{item.label}</a>
+      ))}
+    </div>
+    <p class="mb-2 mt-4 font-mono text-[11px] tracking-[0.14em] text-faint">本页锚点</p>
+    <div class="grid grid-cols-5 gap-2 font-mono text-[12px] tracking-[0.04em]">
+      {anchors.map((item) => (
+        <a class="rounded-[6px] bg-card px-2 py-3 text-center text-muted hover:text-accent" href={item.href}>{item.label}</a>
+      ))}
+    </div>
+  </nav>
+
+  <script>
+    const button = document.querySelector('[data-menu-button]');
+    button?.addEventListener('click', () => {
+      const menu = document.querySelector('[data-mobile-menu]');
+      const willOpen = button.getAttribute('aria-expanded') !== 'true';
+      button.setAttribute('aria-expanded', String(willOpen));
+      menu?.classList.toggle('hidden', !willOpen);
+    });
+  </script>
+</header>

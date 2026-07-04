@@ -1,0 +1,53 @@
+---
+import type { CollectionEntry } from 'astro:content';
+
+interface Props {
+  posts: CollectionEntry<'blog'>[];
+}
+
+const { posts } = Astro.props;
+const sorted = [...posts].sort((a, b) => a.data.date.getTime() - b.data.date.getTime());
+const ym = (date: Date) => `${date.getFullYear()}.${String(date.getMonth() + 1).padStart(2, '0')}`;
+---
+
+<section id="street" class="mt-[140px] scroll-mt-24 bg-night py-[92px] text-night-ink">
+  <div class="container-page">
+    <div class="mb-[52px] flex items-center gap-[18px]">
+      <span class="font-mono text-xs tracking-[0.24em] text-[rgba(240,233,219,0.55)]">04 / 扫街周记</span>
+      <span class="h-px flex-1 bg-[rgba(240,233,219,0.16)]"></span>
+    </div>
+
+    <div class="mb-[52px] flex flex-wrap items-end justify-between gap-x-16 gap-y-6">
+      <div class="max-w-[560px]">
+        <h2 class="text-[clamp(24px,3vw,30px)] font-semibold tracking-[0.03em]">扫街周记</h2>
+        <p class="mt-5 text-[15px] leading-[2] text-[rgba(240,233,219,0.55)] text-pretty">
+          自 2022 年 7 月起，用相机记录街头的人和光。一辑一辑，都是走过的日子。
+        </p>
+      </div>
+      <a
+        class="border-b border-[rgba(240,233,219,0.16)] pb-[3px] font-mono text-[13px] tracking-[0.06em] text-night-ink hover:opacity-70"
+        href="/street"
+      >从第一辑读起 →</a>
+    </div>
+
+    {sorted.length > 0 ? (
+      <div class="grid grid-cols-[repeat(auto-fit,minmax(190px,1fr))] gap-5">
+        {sorted.map((post) => (
+          <div class="flex flex-col gap-3">
+            {post.data.cover ? (
+              <img class="block h-[260px] w-full object-cover" src={post.data.cover} alt={post.data.title} loading="lazy" />
+            ) : (
+              <div class="photo-slot photo-slot--dark h-[260px] w-full">这一辑的照片</div>
+            )}
+            <div class="flex justify-between gap-3 font-mono text-[11.5px] tracking-[0.06em] text-[rgba(240,233,219,0.55)]">
+              <a class="hover:text-night-ink" href={`/posts/${post.id}`}>{post.data.title.replace(/^扫街周记[｜|]\s*/, '')}</a>
+              <span>{ym(post.data.date)}</span>
+            </div>
+          </div>
+        ))}
+      </div>
+    ) : (
+      <p class="text-[15px] leading-[2] text-[rgba(240,233,219,0.55)]">周记整理中，敬请期待。</p>
+    )}
+  </div>
+</section>

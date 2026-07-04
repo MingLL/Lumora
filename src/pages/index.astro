@@ -1,0 +1,30 @@
+---
+import { getCollection } from 'astro:content';
+import SiteLayout from '@/layouts/SiteLayout.astro';
+import HeroSection from '@/components/HeroSection.astro';
+import NowReading from '@/components/NowReading.astro';
+import ChapterGrid from '@/components/ChapterGrid.astro';
+import TimelineSection from '@/components/TimelineSection.astro';
+import StreetSection from '@/components/StreetSection.astro';
+import AuthorIntro from '@/components/AuthorIntro.astro';
+import SectionNav from '@/components/SectionNav.astro';
+
+const posts = (await getCollection('blog')).sort((a, b) => b.data.date.getTime() - a.data.date.getTime());
+const firstPost = posts[posts.length - 1];
+const streetPosts = posts.filter((post) => post.data.series === '扫街周记' || post.data.category === '扫街周记');
+const heroSource = streetPosts.find((post) => post.data.cover) ?? posts.find((post) => post.data.cover);
+const heroPhoto = heroSource?.data.cover ?? '';
+const heroCaption = heroSource
+  ? `${heroSource.data.title} · ${heroSource.data.date.getFullYear()}.${String(heroSource.data.date.getMonth() + 1).padStart(2, '0')}`
+  : '扫街周记 · 用镜头记录街头';
+---
+
+<SiteLayout>
+  <SectionNav />
+  <HeroSection photo={heroPhoto} caption={heroCaption} />
+  <NowReading post={firstPost} />
+  <ChapterGrid posts={posts} />
+  <TimelineSection posts={posts} />
+  <StreetSection posts={streetPosts} />
+  <AuthorIntro />
+</SiteLayout>

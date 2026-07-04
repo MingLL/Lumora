@@ -1,0 +1,116 @@
+---
+import { getCollection } from 'astro:content';
+import SiteLayout from '@/layouts/SiteLayout.astro';
+import CategoryTabs from '@/components/CategoryTabs.astro';
+import SearchBox from '@/components/SearchBox.astro';
+
+const posts = (await getCollection('blog')).sort((a, b) => b.data.date.getTime() - a.data.date.getTime());
+const categories = [...new Set(posts.map((post) => post.data.category))];
+const tags = [...new Set(posts.flatMap((post) => post.data.tags))].sort();
+const years = [...new Set(posts.map((post) => post.data.date.getFullYear()))].sort((a, b) => b - a);
+const formatDate = (date: Date) => date.toLocaleDateString('zh-CN', {
+  year: 'numeric',
+  month: '2-digit',
+  day: '2-digit'
+});
+---
+
+<SiteLayout title="文章归档" description="远方有温度的全部文章，按年份、分类和标签整理。">
+  <section class="container-page py-12 md:py-16">
+    <div class="max-w-3xl">
+      <p class="section-kicker">Archive</p>
+      <h1 class="mt-4 font-serif text-4xl text-ink md:text-6xl">文章归档</h1>
+      <p class="mt-5 text-lg leading-8 text-muted">把成长、城市、摄影和生活里的小片刻，按时间收好。你可以按分类筛选，也可以直接搜索某个阶段。</p>
+    </div>
+    <div class="mt-9 grid gap-4 lg:grid-cols-[1fr_320px]">
+      <SearchBox />
+      <CategoryTabs categories={categories} />
+    </div>
+    <div class="mt-5 flex flex-wrap gap-2">
+      {tags.map((tag) => <button class="rounded-full border border-line bg-card/80 px-3 py-1 text-xs text-muted hover:text-accent" type="button" data-tag={tag}>#{tag}</button>)}
+    </div>
+    <div class="mt-10 space-y-10" data-post-list>
+      {years.map((year) => (
+        <section data-year-section>
+          <h2 class="font-serif text-2xl text-ink">{year}</h2>
+          <div class="mt-4 space-y-3">
+            {posts.filter((post) => post.data.date.getFullYear() === year).map((post) => (
+              <a
+                class="editorial-card group block rounded-[6px] p-5 transition hover:-translate-y-0.5 hover:shadow-soft"
+                href={`/posts/${post.id}`}
+                data-post-item
+                data-category={post.data.category}
+                data-tags={post.data.tags.join(' ')}
+                data-search={`${post.data.title} ${post.data.description} ${post.data.tags.join(' ')}`}
+              >
+                <div class="date-stamp">
+                  <time datetime={post.data.date.toISOString()}>{formatDate(post.data.date)}</time>
+                  <span>{post.data.category}</span>
+                  {post.data.city && <span>· {post.data.city}</span>}
+                </div>
+                <h3 class="mt-2 font-serif text-xl text-ink group-hover:text-accent">{post.data.title}</h3>
+                <p class="mt-2 leading-7 text-muted">{post.data.description}</p>
+              </a>
+            ))}
+          </div>
+        </section>
+      ))}
+    </div>
+    <p class="editorial-card mt-10 hidden rounded-[6px] p-5 text-muted" data-empty-state>没有找到匹配的文章，换个关键词试试。</p>
+  </section>
+  <script>
+    const input = document.querySelector('[data-search-input]') as HTMLInputElement | null;
+    const buttons = Array.from(document.querySelectorAll('[data-category]')) as HTMLButtonElement[];
+    const tagButtons = Array.from(document.querySelectorAll('[data-tag]')) as HTMLButtonElement[];
+    const items = Array.from(document.querySelectorAll('[data-post-item]')) as HTMLElement[];
+    const sections = Array.from(document.querySelectorAll('[data-year-section]')) as HTMLElement[];
+    const empty = document.querySelector('[data-empty-state]') as HTMLElement | null;
+    let activeCategory = new URLSearchParams(window.location.search).get('category') || '全部';
+    let activeTag = '';
+
+    const paintButtons = () => {
+      buttons.forEach((button) => {
+        const active = button.dataset.category === activeCategory;
+        button.className = active
+          ? 'focus-ring rounded-full bg-accent px-4 py-2 text-sm text-white'
+          : 'focus-ring rounded-full border border-line bg-card px-4 py-2 text-sm text-muted hover:text-accent';
+      });
+      tagButtons.forEach((button) => {
+        const active = button.dataset.tag === activeTag;
+        button.className = active
+          ? 'rounded-full bg-accent px-3 py-1 text-xs text-white'
+          : 'rounded-full border border-line bg-card/80 px-3 py-1 text-xs text-muted hover:text-accent';
+      });
+    };
+
+    const applyFilters = () => {
+      const keyword = input?.value.trim().toLowerCase() || '';
+      let visibleCount = 0;
+      items.forEach((item) => {
+        const categoryMatch = activeCategory === '全部' || item.dataset.category === activeCategory;
+        const tagMatch = !activeTag || (item.dataset.tags || '').split(' ').includes(activeTag);
+        const textMatch = (item.dataset.search || '').toLowerCase().includes(keyword);
+        const visible = categoryMatch && tagMatch && textMatch;
+        item.toggleAttribute('hidden', !visible);
+        if (visible) visibleCount += 1;
+      });
+      sections.forEach((section) => {
+        const hasVisible = Boolean(section.querySelector('[data-post-item]:not([hidden])'));
+        section.toggleAttribute('hidden', !hasVisible);
+      });
+      empty?.classList.toggle('hidden', visibleCount !== 0);
+      paintButtons();
+    };
+
+    buttons.forEach((button) => button.addEventListener('click', () => {
+      activeCategory = button.dataset.category || '全部';
+      applyFilters();
+    }));
+    tagButtons.forEach((button) => button.addEventListener('click', () => {
+      activeTag = activeTag === button.dataset.tag ? '' : button.dataset.tag || '';
+      applyFilters();
+    }));
+    input?.addEventListener('input', applyFilters);
+    applyFilters();
+  </script>
+</SiteLayout>

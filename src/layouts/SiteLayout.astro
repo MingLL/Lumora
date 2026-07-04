@@ -1,0 +1,55 @@
+---
+import SiteHeader from '@/components/SiteHeader.astro';
+import SiteFooter from '@/components/SiteFooter.astro';
+import '@/styles/global.css';
+import { site } from '@/data/site';
+
+interface Props {
+  title?: string;
+  description?: string;
+}
+
+const { title = site.name, description = site.description } = Astro.props;
+const pageTitle = title === site.name ? title : `${title}｜${site.name}`;
+---
+
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="description" content={description} />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="generator" content={Astro.generator} />
+    <meta property="og:title" content={pageTitle} />
+    <meta property="og:description" content={description} />
+    <meta property="og:type" content="website" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <link rel="canonical" href={new URL(Astro.url.pathname, site.url)} />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous" />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;600;900&family=IBM+Plex+Mono:wght@400;500&family=Ma+Shan+Zheng&display=swap"
+      rel="stylesheet"
+    />
+    <title>{pageTitle}</title>
+  </head>
+  <body class="min-h-screen">
+    <SiteHeader currentPath={Astro.url.pathname} />
+    <main>
+      <slot />
+    </main>
+    <SiteFooter />
+    <button
+      class="focus-ring fixed bottom-5 right-5 z-40 hidden h-11 w-11 items-center justify-center rounded-full border border-line bg-white/90 text-lg text-accent shadow-soft backdrop-blur md:flex"
+      type="button"
+      data-back-top
+      aria-label="回到顶部"
+    >
+      ↑
+    </button>
+    <script>
+      const backTop = document.querySelector('[data-back-top]');
+      backTop?.addEventListener('click', () => window.scrollTo({ top: 0, behavior: 'smooth' }));
+    </script>
+  </body>
+</html>

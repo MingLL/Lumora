@@ -1,0 +1,14 @@
+---
+import { site } from '@/data/site';
+---
+
+<footer class="mt-24 border-t border-line md:mt-[100px]">
+  <div class="container-page flex flex-wrap items-center justify-between gap-x-10 gap-y-4 py-9 font-mono text-xs text-faint">
+    <span>{site.name} · 2021 — 2026 · {site.author}</span>
+    <span class="flex gap-[26px]">
+      <a class="hover:text-accent" href="/about">公众号</a>
+      <a class="hover:text-accent" href={`mailto:${site.email}`}>邮箱</a>
+      <a class="hover:text-accent" href="/rss.xml">RSS</a>
+    </span>
+  </div>
+</footer>

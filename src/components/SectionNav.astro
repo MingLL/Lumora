@@ -1,0 +1,58 @@
+---
+// 首页右侧浮动章节导航（scrollspy）：随滚动高亮当前分节
+const items = [
+  { id: 'now', label: '此刻' },
+  { id: 'chapters', label: '章节' },
+  { id: 'toc', label: '目录' },
+  { id: 'street', label: '扫街' },
+  { id: 'about', label: '关于' }
+];
+---
+
+<nav class="section-nav" aria-label="章节导航">
+  {items.map((item) => (
+    <a href={`#${item.id}`} data-spy-link={item.id}>
+      <span class="section-nav-bar" aria-hidden="true"></span>
+      <span>{item.label}</span>
+    </a>
+  ))}
+</nav>
+
+<script>
+  const links = Array.from(document.querySelectorAll<HTMLAnchorElement>('[data-spy-link]'));
+  if (links.length) {
+    const setActive = (id: string | null) => {
+      for (const link of links) {
+        link.classList.toggle('is-active', id !== null && link.dataset.spyLink === id);
+      }
+    };
+
+    const sections = links
+      .map((link) => document.getElementById(link.dataset.spyLink || ''))
+      .filter((el): el is HTMLElement => Boolean(el));
+
+    // 当前分节 = 顶部已越过视口参考线的最后一个分节；都没越过（还在首屏）则不高亮
+    const update = () => {
+      const line = window.innerHeight * 0.42;
+      let activeId: string | null = null;
+      for (const section of sections) {
+        if (section.getBoundingClientRect().top <= line) activeId = section.id;
+      }
+      setActive(activeId);
+    };
+
+    let ticking = false;
+    const onScroll = () => {
+      if (ticking) return;
+      ticking = true;
+      requestAnimationFrame(() => {
+        update();
+        ticking = false;
+      });
+    };
+
+    window.addEventListener('scroll', onScroll, { passive: true });
+    window.addEventListener('resize', onScroll);
+    update();
+  }
+</script>

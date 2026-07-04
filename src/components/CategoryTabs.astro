@@ -1,0 +1,14 @@
+---
+interface Props {
+  categories: string[];
+}
+
+const { categories } = Astro.props;
+---
+
+<div class="flex flex-wrap gap-2" data-category-tabs>
+  <button class="focus-ring rounded-full bg-accent px-4 py-2 text-sm text-white" type="button" data-category="全部">全部</button>
+  {categories.map((category) => (
+    <button class="focus-ring rounded-full border border-line bg-card px-4 py-2 text-sm text-muted hover:text-accent" type="button" data-category={category}>{category}</button>
+  ))}
+</div>

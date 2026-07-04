@@ -1,0 +1,32 @@
+---
+import type { CollectionEntry } from 'astro:content';
+
+interface Props {
+  posts: CollectionEntry<'blog'>[];
+}
+
+const { posts } = Astro.props;
+const formatDate = (date: Date) => date.toLocaleDateString('zh-CN', {
+  year: 'numeric',
+  month: '2-digit',
+  day: '2-digit'
+});
+---
+
+<section id="home-directory" class="container-page py-16 md:py-20">
+  <div class="section-rule mb-9">
+    <span class="section-kicker">03 / 目录 · 最近更新</span>
+  </div>
+  <div class="border-b border-line">
+    {posts.map((post) => (
+      <a class="grid gap-3 border-t border-line px-1 py-7 transition hover:bg-card/70 md:grid-cols-[1fr_auto] md:gap-12" href={`/posts/${post.id}`}>
+        <span class="min-w-0">
+          <span class="block font-serif text-2xl font-semibold leading-relaxed tracking-[0.02em] text-ink">{post.data.title}</span>
+          <span class="mt-2 block text-sm leading-7 text-muted">{post.data.description}</span>
+        </span>
+        <span class="font-mono text-xs tracking-[0.08em] text-muted md:pt-3">{post.data.category} · {post.data.city || '生活'} · {formatDate(post.data.date)}</span>
+      </a>
+    ))}
+  </div>
+  <a class="mt-8 inline-flex border-b border-line pb-1 font-mono text-xs tracking-[0.12em] text-muted hover:border-accent hover:text-accent" href="/archive">全部文章 · 按时间线浏览 →</a>
+</section>

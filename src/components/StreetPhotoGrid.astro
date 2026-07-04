@@ -1,0 +1,44 @@
+---
+import type { CollectionEntry } from 'astro:content';
+
+interface Props {
+  posts: CollectionEntry<'blog'>[];
+}
+
+const { posts } = Astro.props;
+const formatDate = (date: Date) => date.toLocaleDateString('zh-CN', {
+  year: 'numeric',
+  month: '2-digit',
+  day: '2-digit'
+});
+---
+
+<div class="columns-1 gap-6 sm:columns-2 lg:columns-3">
+  {posts.map((post, index) => (
+    <a class="editorial-card group mb-6 block break-inside-avoid overflow-hidden rounded-[6px] p-3 transition duration-300 hover:-translate-y-1 hover:shadow-soft" href={`/posts/${post.id}`}>
+      {
+        post.data.cover ? (
+          <img class:list={[
+            'w-full rounded-[3px] object-cover grayscale-[18%] transition duration-500 group-hover:grayscale-0',
+            index % 3 === 0 ? 'aspect-[3/4]' : 'aspect-[4/3]'
+          ]} src={post.data.cover} alt={post.data.title} />
+        ) : (
+          <div class:list={[
+            'film-frame w-full rounded-[3px]',
+            index % 3 === 0 ? 'aspect-[3/4]' : 'aspect-[4/3]'
+          ]}>
+            <div class="film-skyline"></div>
+          </div>
+        )
+      }
+      <div class="p-2 pt-5">
+        <div class="date-stamp">
+          <time datetime={post.data.date.toISOString()}>{formatDate(post.data.date)}</time>
+          {post.data.city && <span>{post.data.city}</span>}
+        </div>
+        <h3 class="mt-3 font-serif text-2xl leading-snug text-ink transition group-hover:text-accent">{post.data.title}</h3>
+        <p class="mt-2 leading-7 text-muted">{post.data.description}</p>
+      </div>
+    </a>
+  ))}
+</div>

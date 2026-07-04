@@ -1,0 +1,43 @@
+---
+import SiteLayout from '@/layouts/SiteLayout.astro';
+import SubscribeCard from '@/components/SubscribeCard.astro';
+---
+
+<SiteLayout title="关于我" description="关于温野和公众号远方有温度。">
+  <section class="container-page py-12 md:py-16">
+    <div class="grid gap-10 md:grid-cols-[0.9fr_1.1fr] md:items-start">
+      <div class="md:sticky md:top-28">
+        <p class="section-kicker">About</p>
+        <h1 class="mt-4 font-serif text-4xl text-ink md:text-6xl">关于我</h1>
+        <div class="film-frame mt-8 aspect-[4/5] rounded-[6px] p-5 shadow-soft">
+          <div class="film-skyline"></div>
+          <div class="flex h-full items-end rounded-[3px] p-5">
+            <p class="font-serif text-3xl leading-snug text-white drop-shadow">一个普通人的成长、城市与生活记录。</p>
+          </div>
+        </div>
+      </div>
+      <div class="space-y-8">
+        <section class="editorial-card rounded-[6px] p-6 md:p-8">
+          <h2 class="font-serif text-2xl text-ink">你好，我是温野。</h2>
+          <div class="mt-4 space-y-4 leading-8 text-muted">
+            <p>我写「远方有温度」，记录工作、生活、城市、远方和成长。</p>
+            <p>这里没有标准答案，只有一个普通人在不同阶段里的真实感受。如果你也正在经历毕业、工作、城市迁徙、人生选择，或许这里会有一些相似的片刻。</p>
+          </div>
+        </section>
+        <section class="editorial-card rounded-[6px] p-6 md:p-8">
+          <h2 class="font-serif text-2xl text-ink">为什么写作</h2>
+          <p class="mt-4 leading-8 text-muted">写作是我整理生活的方式。很多当下看不清的事，写下来之后会慢慢显影：哪些是低谷，哪些是转折，哪些只是一个普通但值得记住的晚上。</p>
+        </section>
+        <section class="editorial-card rounded-[6px] p-6 md:p-8">
+          <h2 class="font-serif text-2xl text-ink">适合谁阅读</h2>
+          <p class="mt-4 leading-8 text-muted">适合正在毕业、初入职场、搬去新城市、重新做选择，或者只是想看看另一个普通人如何慢慢生活的人。</p>
+        </section>
+        <SubscribeCard />
+        <section class="editorial-card rounded-[6px] p-6 md:p-8">
+          <h2 class="font-serif text-2xl text-ink">联系我</h2>
+          <p class="mt-4 leading-8 text-muted">邮箱、微信或其他联系方式可以放在这里。后续也可以扩展为投稿、合作或留言入口。</p>
+        </section>
+      </div>
+    </div>
+  </section>
+</SiteLayout>

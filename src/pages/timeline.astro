@@ -1,0 +1,39 @@
+---
+import { getCollection } from 'astro:content';
+import SiteLayout from '@/layouts/SiteLayout.astro';
+import { timeline } from '@/data/site';
+
+const posts = await getCollection('blog');
+---
+
+<SiteLayout title="成长时间线" description="按年份整理远方有温度里的成长、城市和人生选择。">
+  <section class="container-page py-12 md:py-16">
+    <div class="max-w-3xl">
+      <p class="section-kicker">Timeline</p>
+      <h1 class="mt-4 font-serif text-4xl text-ink md:text-6xl">成长时间线</h1>
+      <p class="mt-5 text-lg leading-8 text-muted">不是为了证明自己走得多快，只是把那些真实发生过的阶段，一段一段放回生活里。</p>
+    </div>
+    <div class="relative mt-12 space-y-6 border-l border-line pl-5 md:pl-10">
+      {timeline.map((item) => {
+        const related = posts.filter((post) => item.posts.includes(post.data.title));
+        return (
+          <article class="editorial-card relative rounded-[6px] p-6 md:p-8">
+            <span class="absolute -left-[31px] top-8 h-3 w-3 rounded-full bg-accent ring-4 ring-paper md:-left-[47px]"></span>
+            <p class="text-sm text-accent">{item.year}</p>
+            <h2 class="mt-2 font-serif text-3xl text-ink">{item.title}</h2>
+            <p class="mt-4 max-w-3xl leading-8 text-muted">{item.description}</p>
+            <div class="mt-6 grid gap-3 md:grid-cols-2">
+              {related.map((post) => (
+                <a class="rounded-[6px] border border-line bg-paper/60 p-4 transition hover:border-accent hover:bg-card" href={`/posts/${post.id}`}>
+                  <span class="text-xs text-muted">{post.data.category}</span>
+                  <strong class="mt-2 block font-serif text-lg font-normal text-ink">{post.data.title}</strong>
+                  <span class="mt-2 block text-sm leading-6 text-muted">{post.data.description}</span>
+                </a>
+              ))}
+            </div>
+          </article>
+        );
+      })}
+    </div>
+  </section>
+</SiteLayout>

@@ -1,0 +1,35 @@
+---
+import { site } from '@/data/site';
+---
+
+<section id="about" class="container-page mt-[120px] scroll-mt-24">
+  <div class="mb-16 flex items-center gap-[18px]">
+    <span class="section-kicker">05 / 关于温野</span>
+    <span class="h-px flex-1 bg-line"></span>
+  </div>
+
+  <div class="flex flex-wrap gap-x-24 gap-y-14">
+    <div class="max-w-[620px] flex-1 basis-[460px]">
+      <h2 class="text-[26px] font-semibold tracking-[0.04em]">你好，我是{site.author}。</h2>
+      <p class="mt-8 text-base leading-[2.15] text-prose text-pretty">
+        写字，拍照，记录自己从校园走向城市的这些年。从 2021 年 2 月的第一篇写到现在，文章首发于公众号「{site.name}」。
+      </p>
+      <p class="mt-6 text-base leading-[2.15] text-prose text-pretty">
+        这里不是资讯站，也不是官网。只是我把这些年写过的文章、拍过的照片、走过的城市、做过的选择，慢慢整理成的一个自己的内容空间。
+      </p>
+      <p class="mt-6 text-base leading-[2.15] text-prose text-pretty">
+        如果这些文字恰好陪你走过某一段路，那就是它们最好的去处。
+      </p>
+      <div class="mt-11 flex items-center gap-5">
+        <span class="font-hand text-[34px] text-[#3A352E] -rotate-2">{site.author}</span>
+        <span class="seal-mark p-[8px_6px_5px] text-[15px] tracking-[0.18em] [box-shadow:inset_0_0_0_1.5px_rgba(247,241,228,0.35)]">{site.author}</span>
+      </div>
+    </div>
+
+    <div class="flex shrink-0 flex-col gap-4">
+      <img class="block h-[140px] w-[140px] border border-line-soft bg-white object-contain p-1" src={site.qrcode} alt={`${site.name}公众号二维码`} />
+      <div class="font-mono text-xs tracking-[0.06em] text-muted">公众号 · {site.name}</div>
+      <div class="max-w-[190px] text-[13px] leading-[1.9] text-faint text-pretty">文章首发于公众号，网站不定期整理归档。</div>
+    </div>
+  </div>
+</section>

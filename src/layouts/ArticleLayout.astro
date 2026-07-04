@@ -1,0 +1,70 @@
+---
+import type { CollectionEntry } from 'astro:content';
+import { render } from 'astro:content';
+import SiteLayout from '@/layouts/SiteLayout.astro';
+import SubscribeCard from '@/components/SubscribeCard.astro';
+
+interface Props {
+  post: CollectionEntry<'blog'>;
+  previous?: CollectionEntry<'blog'>;
+  next?: CollectionEntry<'blog'>;
+}
+
+const { post, previous, next } = Astro.props;
+const { Content } = await render(post);
+const formatDate = (date: Date) => date.toLocaleDateString('zh-CN', {
+  year: 'numeric',
+  month: 'long',
+  day: 'numeric'
+});
+---
+
+<SiteLayout title={post.data.title} description={post.data.description}>
+  <article class="container-page pb-20 pt-10 md:pt-16">
+    <a class="focus-ring inline-flex rounded-full border border-line bg-card/80 px-4 py-2 text-sm text-muted shadow-paper hover:text-accent" href="/archive">← 返回归档</a>
+    <header class="mx-auto mt-9 max-w-[780px] text-center">
+      <div class="flex flex-wrap items-center justify-center gap-2 text-sm text-muted">
+        <time datetime={post.data.date.toISOString()}>{formatDate(post.data.date)}</time>
+        <span>·</span>
+        <a class="hover:text-accent" href={`/archive?category=${encodeURIComponent(post.data.category)}`}>{post.data.category}</a>
+        {post.data.city && <span>· {post.data.city}</span>}
+      </div>
+      <h1 class="mt-6 font-serif text-4xl leading-tight text-ink md:text-6xl">{post.data.title}</h1>
+      <p class="mx-auto mt-6 max-w-2xl text-lg leading-8 text-muted">{post.data.description}</p>
+      <div class="mt-7 flex flex-wrap justify-center gap-2">
+        {post.data.tags.map((tag) => <span class="rounded-full border border-line bg-card/80 px-3 py-1 text-sm text-muted">#{tag}</span>)}
+      </div>
+    </header>
+    {
+      post.data.cover ? (
+        <img class="mx-auto mt-11 aspect-[16/9] max-h-[520px] w-full max-w-5xl rounded-[6px] border border-line object-cover shadow-soft" src={post.data.cover} alt={post.data.title} />
+      ) : (
+        <div class="film-frame mx-auto mt-11 flex aspect-[16/9] max-h-[520px] w-full max-w-5xl items-end rounded-[6px] p-7 shadow-soft">
+          <div class="film-skyline"></div>
+          <span class="font-serif text-3xl text-white drop-shadow">远方有温度</span>
+        </div>
+      )
+    }
+    <div class="soft-divider mx-auto mt-12 max-w-[720px]"></div>
+    <div class="prose-warm mx-auto mt-10 max-w-[720px]">
+      <Content />
+    </div>
+    <nav class="mx-auto mt-14 grid max-w-[720px] gap-4 border-y border-line py-6 md:grid-cols-2">
+      <div>
+        {previous && <a class="group block rounded-[6px] bg-card/70 p-4 shadow-paper hover:bg-white/90" href={`/posts/${previous.id}`}>
+          <span class="text-sm text-muted">上一篇</span>
+          <strong class="mt-1 block font-normal text-ink group-hover:text-accent">{previous.data.title}</strong>
+        </a>}
+      </div>
+      <div>
+        {next && <a class="group block rounded-[6px] bg-card/70 p-4 text-left shadow-paper hover:bg-white/90 md:text-right" href={`/posts/${next.id}`}>
+          <span class="text-sm text-muted">下一篇</span>
+          <strong class="mt-1 block font-normal text-ink group-hover:text-accent">{next.data.title}</strong>
+        </a>}
+      </div>
+    </nav>
+    <div class="mx-auto mt-10 max-w-[720px]">
+      <SubscribeCard compact />
+    </div>
+  </article>
+</SiteLayout>

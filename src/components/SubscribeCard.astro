@@ -1,0 +1,23 @@
+---
+import { site } from '@/data/site';
+
+interface Props {
+  compact?: boolean;
+}
+
+const { compact = false } = Astro.props;
+---
+
+<section class:list={[
+  'editorial-card overflow-hidden rounded-[6px]',
+  compact ? 'p-5' : 'p-6 md:p-8'
+]}>
+  <div class="grid gap-5 sm:grid-cols-[1fr_auto] sm:items-center">
+    <div>
+      <p class="section-kicker">Subscribe</p>
+      <p class="mt-3 font-serif text-3xl text-ink">在公众号继续相遇</p>
+      <p class="mt-3 leading-7 text-muted">如果这些文字刚好陪你走过某个阶段，欢迎关注「远方有温度」。这里会继续更新成长、城市、扫街和生活里的小片刻。</p>
+    </div>
+    <img class="h-[7.5rem] w-[7.5rem] rounded-[3px] border border-line bg-card object-cover shadow-paper" src={site.qrcode} alt="公众号二维码" />
+  </div>
+</section>

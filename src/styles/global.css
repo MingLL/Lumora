@@ -1,0 +1,425 @@
+@import "tailwindcss";
+
+/* ------- 远方有温度 · v4 设计令牌 ------- */
+@theme {
+  --color-paper: #F7F3EB;
+  --color-warm: #EFE9DA;
+  --color-ink: #2B2723;
+  --color-prose: #4A443B;
+  --color-muted: #6E675A;
+  --color-faint: #8A8271;
+  --color-accent: #9E372B;
+  --color-olive: #716443;
+  --color-line: #DFD6C3;
+  --color-line-soft: #E8E0CC;
+  --color-card: #FCF9F2;
+  --color-note: #FBF7ED;
+  --color-night: #26221D;
+  --color-night-ink: #F0E9DB;
+  --font-sans: "Noto Serif SC", "Songti SC", STSong, Georgia, serif;
+  --font-serif: "Noto Serif SC", "Songti SC", STSong, Georgia, serif;
+  --font-mono: "IBM Plex Mono", "SFMono-Regular", "Menlo", "Monaco", "Consolas", monospace;
+  --font-hand: "Ma Shan Zheng", "Kaiti SC", "STKaiti", "KaiTi", cursive;
+  --shadow-soft: 0 22px 70px rgba(43, 39, 35, 0.12);
+  --shadow-paper: 0 12px 30px rgba(43, 39, 35, 0.08);
+}
+
+:root {
+  color-scheme: light;
+  --paper: #F7F3EB;
+  --ink: #2B2723;
+  --muted: #6E675A;
+  --faint: #8A8271;
+  --accent: #9E372B;
+  --line: #DFD6C3;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  margin: 0;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: "Noto Serif SC", "Songti SC", STSong, Georgia, serif;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+@layer base {
+  a {
+    color: inherit;
+    text-decoration: none;
+  }
+}
+
+img {
+  max-width: 100%;
+  height: auto;
+}
+
+::selection {
+  background: rgba(158, 55, 43, 0.18);
+}
+
+.container-page {
+  width: min(1140px, calc(100% - 40px));
+  margin-inline: auto;
+}
+
+.film-frame {
+  position: relative;
+  overflow: hidden;
+  background:
+    linear-gradient(180deg, rgba(39, 35, 31, 0.05), rgba(39, 35, 31, 0.18)),
+    linear-gradient(135deg, #CFA57F 0%, #A8643E 38%, #5E6B65 72%, #2F3130 100%);
+}
+
+.film-frame::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background-image: linear-gradient(rgba(255,255,255,0.2) 1px, transparent 1px);
+  background-size: 100% 7px;
+  mix-blend-mode: soft-light;
+  opacity: 0.45;
+  pointer-events: none;
+}
+
+.film-frame::before {
+  content: "";
+  position: absolute;
+  inset: 14px;
+  border: 1px solid rgba(255, 253, 248, 0.42);
+  pointer-events: none;
+  z-index: 1;
+}
+
+.film-frame > * {
+  position: relative;
+  z-index: 2;
+}
+
+.film-skyline {
+  position: absolute;
+  inset-inline: 0;
+  bottom: 0;
+  height: 42%;
+  background:
+    linear-gradient(to top, rgba(39, 35, 31, 0.64), rgba(39, 35, 31, 0)),
+    linear-gradient(90deg, transparent 0 7%, rgba(255,255,255,0.16) 7% 8%, transparent 8% 17%, rgba(255,255,255,0.11) 17% 18%, transparent 18% 31%, rgba(255,255,255,0.14) 31% 32%, transparent 32% 46%, rgba(255,255,255,0.12) 46% 47%, transparent 47% 62%, rgba(255,255,255,0.16) 62% 63%, transparent 63% 78%, rgba(255,255,255,0.12) 78% 79%, transparent 79%);
+  clip-path: polygon(0 58%, 8% 45%, 8% 34%, 15% 34%, 15% 52%, 24% 52%, 24% 24%, 31% 24%, 31% 48%, 42% 48%, 42% 10%, 50% 10%, 50% 56%, 61% 56%, 61% 30%, 69% 30%, 69% 49%, 80% 49%, 80% 20%, 88% 20%, 88% 60%, 100% 60%, 100% 100%, 0 100%);
+  opacity: 0.92;
+}
+
+.section-kicker {
+  color: var(--accent);
+  font-family: "IBM Plex Mono", "SFMono-Regular", "Menlo", "Monaco", "Consolas", monospace;
+  font-size: 12px;
+  letter-spacing: 0.24em;
+}
+
+.section-rule {
+  display: flex;
+  align-items: center;
+  gap: 1.125rem;
+}
+
+.section-rule::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: var(--line);
+}
+
+.vertical-title {
+  writing-mode: vertical-rl;
+  text-orientation: mixed;
+}
+
+.seal-mark {
+  writing-mode: vertical-rl;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 3px;
+  background: var(--accent);
+  color: #FFF8EC;
+  box-shadow: inset 0 0 0 2px rgba(255, 248, 236, 0.32);
+  transform: rotate(-2deg);
+}
+
+.hand-note {
+  width: fit-content;
+  transform: rotate(-1.5deg);
+  color: var(--accent);
+  font-family: "Ma Shan Zheng", "Kaiti SC", "STKaiti", "KaiTi", cursive;
+}
+
+/* ------- v4 首页专用 ------- */
+.nav-v4 {
+  position: sticky;
+  top: 0;
+  z-index: 40;
+  background: rgba(247, 243, 235, 0.92);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border-bottom: 1px solid rgba(217, 208, 188, 0.55);
+}
+
+.nav-v4-link {
+  color: var(--muted);
+  padding: 4px 1px;
+  transition: color 0.15s;
+}
+
+.nav-v4-link:hover {
+  color: var(--accent);
+  box-shadow: 0 1px 0 var(--accent);
+}
+
+/* 竖排大标题：宽屏竖排，窄屏转横排 */
+.hero-title {
+  writing-mode: vertical-rl;
+  font-size: clamp(64px, 8vw, 110px);
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  line-height: 1;
+  margin: 0;
+  color: var(--ink);
+}
+
+.hero-side {
+  writing-mode: vertical-rl;
+  font-size: 13px;
+  letter-spacing: 0.62em;
+  color: var(--faint);
+  padding-top: 8px;
+}
+
+.hero-titlewrap {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 24px;
+}
+
+.seal-mark {
+  writing-mode: vertical-rl;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 3px;
+  background: var(--accent);
+  color: #F7F1E4;
+  font-weight: 900;
+  box-shadow: inset 0 0 0 2px rgba(247, 241, 228, 0.35);
+  transform: rotate(-2deg);
+}
+
+/* 右侧浮动章节导航（scrollspy） */
+.section-nav {
+  position: fixed;
+  right: clamp(20px, 3vw, 60px);
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 30;
+  display: none;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.section-nav a {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 5px 0 5px 16px;
+  font-size: 14px;
+  letter-spacing: 0.1em;
+  color: var(--muted);
+  line-height: 1.2;
+  transition: color 0.18s ease;
+}
+
+.section-nav-bar {
+  width: 2px;
+  height: 18px;
+  background: var(--line);
+  transition: background 0.18s ease, height 0.18s ease;
+}
+
+.section-nav a:hover {
+  color: var(--ink);
+}
+
+.section-nav a.is-active {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.section-nav a.is-active .section-nav-bar {
+  background: var(--accent);
+  height: 22px;
+}
+
+@media (min-width: 1280px) {
+  .section-nav {
+    display: flex;
+  }
+}
+
+/* 空图占位（无 cover 时） */
+.photo-slot {
+  display: grid;
+  place-items: center;
+  background: rgba(127, 127, 127, 0.06);
+  border: 1px solid var(--line-soft, #E8E0CC);
+  color: var(--faint);
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  text-align: center;
+  line-height: 1.7;
+}
+
+.photo-slot--dark {
+  background: rgba(127, 127, 127, 0.1);
+  border-color: rgba(240, 233, 219, 0.16);
+  color: rgba(240, 233, 219, 0.5);
+}
+
+@media (max-width: 780px) {
+  .hero-title {
+    writing-mode: horizontal-tb;
+    font-size: clamp(40px, 11vw, 56px);
+  }
+  .hero-side {
+    display: none;
+  }
+  .hero-titlewrap {
+    flex-direction: row;
+    align-items: flex-end;
+  }
+}
+
+.polaroid {
+  border: 1px solid var(--line);
+  background: #fffdf8;
+  padding: 0.75rem 0.75rem 1rem;
+  box-shadow: var(--shadow-paper);
+}
+
+.photo-placeholder {
+  display: grid;
+  min-height: 250px;
+  place-items: center;
+  border: 2px dashed rgba(116, 110, 100, 0.38);
+  background: #fbfaf7;
+  color: rgba(116, 110, 100, 0.82);
+}
+
+.photo-placeholder-inner {
+  text-align: center;
+  font-size: 0.9rem;
+  line-height: 1.8;
+}
+
+.editorial-card {
+  position: relative;
+  border: 1px solid rgba(222, 210, 191, 0.88);
+  background:
+    linear-gradient(180deg, rgba(255, 253, 248, 0.94), rgba(255, 250, 241, 0.88));
+  box-shadow: var(--shadow-paper);
+}
+
+.editorial-card::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  background: linear-gradient(135deg, rgba(255,255,255,0.82), transparent 40%);
+  opacity: 0.65;
+}
+
+.editorial-card > * {
+  position: relative;
+  z-index: 1;
+}
+
+.date-stamp {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: var(--muted);
+  font-size: 0.75rem;
+  letter-spacing: 0.08em;
+}
+
+.date-stamp::before {
+  content: "";
+  width: 1.75rem;
+  height: 1px;
+  background: var(--accent);
+}
+
+.soft-divider {
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--line), transparent);
+}
+
+.prose-warm {
+  color: var(--ink);
+  font-size: 1.07rem;
+  line-height: 1.95;
+}
+
+.prose-warm p {
+  margin: 1.28em 0;
+}
+
+.prose-warm h2,
+.prose-warm h3 {
+  color: var(--ink);
+  font-family: "Noto Serif SC", "Songti SC", STSong, Georgia, serif;
+  line-height: 1.35;
+  margin-top: 2.2em;
+  margin-bottom: 0.7em;
+}
+
+.prose-warm h2 {
+  font-size: 1.65rem;
+}
+
+.prose-warm h3 {
+  font-size: 1.28rem;
+}
+
+.prose-warm blockquote {
+  border-left: 3px solid var(--accent);
+  margin: 1.8rem 0;
+  padding: 0.2rem 0 0.2rem 1rem;
+  color: var(--muted);
+  background: rgba(255, 255, 255, 0.44);
+}
+
+.prose-warm ul,
+.prose-warm ol {
+  padding-left: 1.4rem;
+}
+
+.prose-warm img {
+  border-radius: 8px;
+  margin: 2rem auto;
+  box-shadow: 0 16px 42px rgba(64, 47, 31, 0.1);
+}
+
+.focus-ring {
+  outline: 2px solid transparent;
+  outline-offset: 3px;
+}
+
+.focus-ring:focus-visible {
+  outline-color: var(--accent);
+}
