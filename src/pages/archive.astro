@@ -65,8 +65,11 @@ const formatDate = (date: Date) => date.toLocaleDateString('zh-CN', {
     const items = Array.from(document.querySelectorAll('[data-post-item]')) as HTMLElement[];
     const sections = Array.from(document.querySelectorAll('[data-year-section]')) as HTMLElement[];
     const empty = document.querySelector('[data-empty-state]') as HTMLElement | null;
-    let activeCategory = new URLSearchParams(window.location.search).get('category') || '全部';
-    let activeTag = '';
+    const params = new URLSearchParams(window.location.search);
+    let activeCategory = params.get('category') || '全部';
+    // 文章页底部的 #标签 链接过来时直接预选中该标签
+    const tagFromUrl = params.get('tag') || '';
+    let activeTag = tagButtons.some((button) => button.dataset.tag === tagFromUrl) ? tagFromUrl : '';
 
     const paintButtons = () => {
       buttons.forEach((button) => {
