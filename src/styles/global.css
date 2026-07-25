@@ -218,10 +218,12 @@ img {
   transform: rotate(-2deg);
 }
 
-/* 右侧浮动章节导航（scrollspy） */
+/* 右侧浮动章节导航（scrollspy）
+   锚定在 .container-page（max 1140px）右缘外 24px，而不是视口右缘，
+   否则窄于 ~1340px 时会压住竖排大标题和右列内容。 */
 .section-nav {
   position: fixed;
-  right: clamp(20px, 3vw, 60px);
+  left: calc(50% + 570px + 24px);
   top: 50%;
   transform: translateY(-50%);
   z-index: 30;
@@ -263,7 +265,8 @@ img {
   height: 22px;
 }
 
-@media (min-width: 1280px) {
+/* 1360px 起右侧留白才够放下导航（(1360-1140)/2 = 110px） */
+@media (min-width: 1360px) {
   .section-nav {
     display: flex;
   }
