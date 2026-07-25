@@ -5,15 +5,36 @@ interface Props {
   name: string;
   description: string;
   posts: CollectionEntry<'blog'>[];
+  index?: number;
 }
 
-const { name, description, posts } = Astro.props;
+const { name, description, posts, index = 0 } = Astro.props;
+
+// 每座城市一组渐变停靠色，避免六张卡片用同一张生成封面
+const palettes = [
+  ['#CFA57F', '#A8643E', '#5E6B65', '#2F3130'], // 黄昏土黄
+  ['#A8B6B0', '#6E8A85', '#47606B', '#26302F'], // 海雾青
+  ['#E0C39A', '#9FA98C', '#4E6E72', '#26332F'], // 沙岸
+  ['#C9976E', '#9A5334', '#6A4A3A', '#2B2320'], // 赭石
+  ['#BFC49A', '#7E9060', '#4C6350', '#26302A'], // 湿绿
+  ['#DCC59B', '#B08A55', '#6B6B57', '#2E2C25'] // 戈壁金
+];
+const skylineVariants = ['', 'film-skyline--b', 'film-skyline--c'];
+
+const [c1, c2, c3, c4] = palettes[index % palettes.length];
+const skyline = skylineVariants[index % skylineVariants.length];
 ---
 
 <article class="editorial-card group overflow-hidden rounded-[6px] p-4 transition duration-300 hover:-translate-y-1 hover:shadow-soft">
-  <div class="film-frame flex aspect-[16/10] items-end rounded-[3px] p-5">
-    <div class="film-skyline"></div>
-    <div>
+  <div
+    class="film-frame flex aspect-[16/10] items-end rounded-[3px] p-5"
+    style={`--film-c1:${c1};--film-c2:${c2};--film-c3:${c3};--film-c4:${c4}`}
+  >
+    <div class:list={['film-skyline', skyline]}></div>
+    {/* 天际线的压暗渐变被 clip-path 裁掉了，楼与楼之间不压暗；
+        这层不裁剪的底部压暗保证浅色调城市上的白字也够对比度 */}
+    <div class="pointer-events-none absolute inset-x-0 bottom-0 h-3/5 bg-gradient-to-t from-[rgba(28,25,22,0.72)] to-transparent"></div>
+    <div class="relative">
       <p class="text-xs uppercase tracking-[0.2em] text-white/75">City Chapter</p>
       <h2 class="mt-2 font-serif text-4xl text-white drop-shadow">{name}</h2>
     </div>
@@ -26,6 +47,5 @@ const { name, description, posts } = Astro.props;
     {posts.slice(0, 3).map((post) => (
       <a class="block truncate text-sm text-ink hover:text-accent" href={`/posts/${post.id}`}>{post.data.title}</a>
     ))}
-    {posts.length === 0 && <p class="text-sm text-muted">文章即将补充。</p>}
   </div>
 </article>

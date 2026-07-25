@@ -9,6 +9,10 @@ const cityGroups = cities.map((city) => ({
   ...city,
   posts: posts.filter((post) => post.data.city === city.name)
 }));
+
+// 还没有文章的城市不占主网格：整卡「文章即将补充」看起来像页面没做完
+const written = cityGroups.filter((city) => city.posts.length > 0);
+const pending = cityGroups.filter((city) => city.posts.length === 0);
 ---
 
 <SiteLayout title="城市地图" description="按城市整理远方有温度里的生活、旅行和阶段记忆。">
@@ -19,7 +23,23 @@ const cityGroups = cities.map((city) => ({
       <p class="mt-5 text-lg leading-8 text-muted">先不用真实地图 API。把城市当作章节，把每一次抵达、停靠和告别，都放在一个可以慢慢打开的位置。</p>
     </div>
     <div class="mt-10 grid gap-5 md:grid-cols-2 lg:grid-cols-3">
-      {cityGroups.map((city) => <CityCard name={city.name} description={city.description} posts={city.posts} />)}
+      {written.map((city, index) => (
+        <CityCard name={city.name} description={city.description} posts={city.posts} index={index} />
+      ))}
     </div>
+
+    {pending.length > 0 && (
+      <div class="mt-14 border-t border-line pt-9">
+        <span class="section-kicker">还没写到的地方</span>
+        <ul class="mt-6 flex flex-wrap gap-x-12 gap-y-4">
+          {pending.map((city) => (
+            <li class="flex items-baseline gap-3.5">
+              <span class="font-serif text-[21px] text-ink/75">{city.name}</span>
+              <span class="text-sm text-muted">{city.description}</span>
+            </li>
+          ))}
+        </ul>
+      </div>
+    )}
   </section>
 </SiteLayout>
