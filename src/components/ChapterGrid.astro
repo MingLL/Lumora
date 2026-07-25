@@ -27,17 +27,21 @@ const chapters = chapterOrder
     这些年被分成几个章节。不是栏目，是一段一段真实走过的路。
   </p>
 
-  <div class="grid grid-cols-[repeat(auto-fit,minmax(300px,1fr))] border-l border-t border-line">
-    {chapters.map((chapter, index) => (
-      <div class="flex flex-col gap-3 border-b border-r border-line px-7 pb-9 pt-[34px]">
-        <span class="text-4xl font-black text-accent/90">{chapterNumerals[index]}</span>
-        <span class="text-[21px] font-semibold tracking-[0.04em]">{chapter.category}</span>
-        <span class="flex flex-col gap-2 text-[13.5px] leading-[1.8] text-muted">
-          {chapter.entries.map((post) => (
-            <a class="text-muted hover:text-accent" href={`/posts/${post.id}`}>· {post.data.title}</a>
-          ))}
-        </span>
-      </div>
-    ))}
+  {/* 外框负责闭合矩形，格线画在单元格上；负边距 + overflow-hidden 裁掉
+      最右列和最后一行重复的 1px，这样章节数量凑不满整行时右下角也不会缺口。 */}
+  <div class="overflow-hidden border border-line">
+    <div class="-mb-px -mr-px grid grid-cols-[repeat(auto-fit,minmax(300px,1fr))]">
+      {chapters.map((chapter, index) => (
+        <div class="flex flex-col gap-3 border-b border-r border-line px-7 pb-9 pt-[34px]">
+          <span class="text-4xl font-black text-accent/90">{chapterNumerals[index]}</span>
+          <span class="text-[21px] font-semibold tracking-[0.04em]">{chapter.category}</span>
+          <span class="flex flex-col gap-2 text-[13.5px] leading-[1.8] text-muted">
+            {chapter.entries.map((post) => (
+              <a class="text-muted hover:text-accent" href={`/posts/${post.id}`}>· {post.data.title}</a>
+            ))}
+          </span>
+        </div>
+      ))}
+    </div>
   </div>
 </section>
