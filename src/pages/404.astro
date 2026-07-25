@@ -1,0 +1,18 @@
+---
+import SiteLayout from '@/layouts/SiteLayout.astro';
+---
+
+<SiteLayout title="页面不存在" description="你要找的这一页走丢了。">
+  <section class="container-page flex min-h-[58vh] flex-col items-center justify-center py-24 text-center">
+    <p class="section-kicker">404 · PAGE NOT FOUND</p>
+    <h1 class="mt-7 font-serif text-4xl leading-tight text-ink md:text-6xl">这一页，走丢了。</h1>
+    <p class="mx-auto mt-6 max-w-md text-lg leading-8 text-muted">
+      你要找的地址不存在，也可能它已经搬去了别处。不如回到首页，或去归档里翻一翻。
+    </p>
+    <div class="mt-9 flex flex-wrap justify-center gap-3">
+      <a class="focus-ring inline-flex rounded-full border border-line bg-card/80 px-5 py-2.5 text-sm text-muted shadow-paper hover:text-accent" href="/">回到首页</a>
+      <a class="focus-ring inline-flex rounded-full border border-line bg-card/80 px-5 py-2.5 text-sm text-muted shadow-paper hover:text-accent" href="/archive">去归档翻翻</a>
+    </div>
+    <p class="hand-note mt-12 text-2xl">慢慢写，慢慢走。</p>
+  </section>
+</SiteLayout>

@@ -19,7 +19,7 @@ const formatDate = (date: Date) => date.toLocaleDateString('zh-CN', {
 });
 ---
 
-<SiteLayout title={post.data.title} description={post.data.description}>
+<SiteLayout title={post.data.title} description={post.data.description} image={post.data.cover || undefined}>
   <article class="container-page pb-20 pt-10 md:pt-16">
     <a class="focus-ring inline-flex rounded-full border border-line bg-card/80 px-4 py-2 text-sm text-muted shadow-paper hover:text-accent" href="/archive">← 返回归档</a>
     <header class="mx-auto mt-9 max-w-[780px] text-center">

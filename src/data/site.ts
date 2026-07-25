@@ -3,8 +3,7 @@ export const site = {
   description: '一个普通人的成长、城市与生活记录。',
   author: '温野',
   email: 'ambition1314@icloud.com',
-  url: 'https://yuanfang-you-wendu.example.com',
-  qrcode: '/images/qrcode/wechat-qrcode.svg',
+  qrcode: '/images/qrcode/wechat-qrcode.jpg',
   nav: [
     { href: '/', label: '首页' },
     { href: '/archive', label: '文章归档' },
