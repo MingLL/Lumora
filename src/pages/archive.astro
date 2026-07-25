@@ -60,7 +60,7 @@ const formatDate = (date: Date) => date.toLocaleDateString('zh-CN', {
   </section>
   <script>
     const input = document.querySelector('[data-search-input]') as HTMLInputElement | null;
-    const buttons = Array.from(document.querySelectorAll('[data-category]')) as HTMLButtonElement[];
+    const buttons = Array.from(document.querySelectorAll('[data-category-tabs] [data-category]')) as HTMLButtonElement[];
     const tagButtons = Array.from(document.querySelectorAll('[data-tag]')) as HTMLButtonElement[];
     const items = Array.from(document.querySelectorAll('[data-post-item]')) as HTMLElement[];
     const sections = Array.from(document.querySelectorAll('[data-year-section]')) as HTMLElement[];
