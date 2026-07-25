@@ -41,9 +41,9 @@ const ogImage = new URL(image, Astro.site);
     />
     <title>{pageTitle}</title>
   </head>
-  <body class="min-h-screen">
+  <body class="flex min-h-screen flex-col">
     <SiteHeader currentPath={Astro.url.pathname} />
-    <main>
+    <main class="flex-1">
       <slot />
     </main>
     <SiteFooter />
