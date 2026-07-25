@@ -11,9 +11,43 @@ const formatDate = (date: Date) => date.toLocaleDateString('zh-CN', {
   month: '2-digit',
   day: '2-digit'
 });
+
+// 瀑布流列数跟着篇数走：只有一两篇时三列会留下大片空列，
+// 单篇改用整幅特写，占满内容宽度。
+const feature = posts.length === 1 ? posts[0] : null;
+const columnClass = posts.length >= 3 ? 'columns-1 sm:columns-2 lg:columns-3' : 'columns-1 sm:columns-2';
 ---
 
-<div class="columns-1 gap-6 sm:columns-2 lg:columns-3">
+{feature ? (
+  <a class="group block" href={`/posts/${feature.id}`}>
+    <div class="overflow-hidden rounded-[4px]">
+      {feature.data.cover ? (
+        <img
+          class="aspect-[16/9] w-full object-cover grayscale-[18%] transition duration-700 group-hover:scale-[1.015] group-hover:grayscale-0"
+          src={feature.data.cover}
+          alt={feature.data.title}
+        />
+      ) : (
+        <div class="film-frame aspect-[16/9] w-full">
+          <div class="film-skyline"></div>
+        </div>
+      )}
+    </div>
+    <div class="mt-8 grid gap-x-16 gap-y-5 md:grid-cols-[1fr_minmax(0,27em)] md:items-end">
+      <div>
+        <div class="date-stamp">
+          <time datetime={feature.data.date.toISOString()}>{formatDate(feature.data.date)}</time>
+          {feature.data.city && <span>{feature.data.city}</span>}
+        </div>
+        <h2 class="mt-4 font-serif text-3xl leading-snug text-ink transition group-hover:text-accent md:text-[2.6rem]">
+          {feature.data.title}
+        </h2>
+      </div>
+      <p class="leading-[2] text-muted text-pretty md:pb-2">{feature.data.description}</p>
+    </div>
+  </a>
+) : (
+<div class:list={['gap-6', columnClass]}>
   {posts.map((post, index) => (
     <a class="editorial-card group mb-6 block break-inside-avoid overflow-hidden rounded-[6px] p-3 transition duration-300 hover:-translate-y-1 hover:shadow-soft" href={`/posts/${post.id}`}>
       {
@@ -42,3 +76,4 @@ const formatDate = (date: Date) => date.toLocaleDateString('zh-CN', {
     </a>
   ))}
 </div>
+)}
