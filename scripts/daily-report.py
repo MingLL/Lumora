@@ -75,6 +75,35 @@ BOT_RE = re.compile(
 )
 MOBILE_RE = re.compile(r'iphone|android|ipad|mobile|harmonyos', re.I)
 
+# 认出来是谁在爬。顺序有讲究：具体的排前面，宽泛的兜底。
+BOT_NAMES = [
+    ("Googlebot", r'googlebot'),
+    ("Bingbot", r'bingbot|msnbot'),
+    ("百度蜘蛛", r'baiduspider'),
+    ("搜狗蜘蛛", r'sogou'),
+    ("360 蜘蛛", r'360spider|haosouspider'),
+    ("字节跳动", r'bytespider|toutiao'),
+    ("Yandex", r'yandex'),
+    ("Apple", r'applebot'),
+    ("Facebook", r'facebookexternalhit'),
+    ("Ahrefs（SEO）", r'ahrefsbot'),
+    ("Semrush（SEO）", r'semrushbot'),
+    ("MJ12（SEO）", r'mj12bot'),
+    ("Censys 扫描器", r'censys'),
+    ("ZGrab 扫描器", r'zgrab'),
+    ("Expanse 扫描器", r'expanse|palo alto'),
+    ("Nmap 扫描器", r'nmap|masscan'),
+    ("curl", r'curl'),
+    ("wget", r'wget'),
+    ("Python 脚本", r'python-requests|python-urllib'),
+    ("Go 脚本", r'go-http-client'),
+    ("Scrapy", r'scrapy'),
+    ("无头浏览器", r'headless'),
+]
+
+# 单个 IP 一天内请求超过这个数，即使 UA 伪装成浏览器也值得看一眼
+SUSPICIOUS_HITS = 60
+
 SEARCH_ENGINES = [
     ("百度", r'baidu\.'),
     ("Google", r'google\.'),
@@ -257,6 +286,16 @@ def is_bot(ua):
     return bool(BOT_RE.search(ua)) or not ua or ua == "-"
 
 
+def bot_name(ua):
+    if not ua or ua == "-":
+        return "未声明 UA"
+    for name, pattern in BOT_NAMES:
+        if re.search(pattern, ua, re.I):
+            return name
+    # 认不出来就把 UA 截一段带上，至少能看出是什么东西在爬
+    return (ua[:36] + "…") if len(ua) > 38 else ua
+
+
 def classify_referer(ref):
     if not ref or ref == "-":
         return ("直接访问", None)
@@ -356,6 +395,40 @@ def summarize(entries):
     stats["errors"] = errors.most_common(10)
 
     stats["visitor_ips"] = len(set(e["ip"] for e in pages))
+
+    # 爬虫明细：按 IP 归并，带上它自称是谁、爬了多少、翻了几个页面
+    bot_rows = {}
+    for e in bots:
+        row = bot_rows.setdefault(
+            e["ip"], {"ip": e["ip"], "names": Counter(), "hits": 0, "paths": set(), "codes": Counter()}
+        )
+        row["hits"] += 1
+        row["paths"].add(e["path"])
+        row["names"][bot_name(e["ua"])] += 1
+        row["codes"][e["status"]] += 1
+    bot_list = []
+    for r in bot_rows.values():
+        name = r["names"].most_common(1)[0][0]
+        # 同一个 IP 换着 UA 来，本身就是值得注意的信号，别把它折叠掉
+        if len(r["names"]) > 1:
+            name = "%s 等 %d 种 UA" % (name, len(r["names"]))
+        bot_list.append({
+            "ip": r["ip"],
+            "name": name,
+            "hits": r["hits"],
+            "paths": len(r["paths"]),
+            "notfound": r["codes"].get(404, 0),
+        })
+    stats["bots"] = sorted(bot_list, key=lambda r: -r["hits"])[:15]
+    stats["bot_ips"] = len(bot_rows)
+
+    # UA 装成浏览器、但请求量高得不像真人的 IP。扫描器通常就藏在这里。
+    human_by_ip = Counter(e["ip"] for e in human)
+    stats["heavy_ips"] = [
+        {"ip": ip, "hits": n, "paths": len(set(e["path"] for e in human if e["ip"] == ip))}
+        for ip, n in human_by_ip.most_common(5)
+        if n >= SUSPICIOUS_HITS
+    ]
     return stats
 
 
@@ -502,6 +575,54 @@ def render(day, stats, prev):
             if count or (peak and hour % 3 == 0):
                 parts.append('%02d 时 %s %d' % (hour, bar(count, peak), count))
         parts.append('</pre></div>')
+
+    # 爬虫明细
+    if stats["bots"]:
+        parts.append('<div style="%s"><h2 style="%s">爬虫与机器人</h2>' % (css_card, css_h2))
+        parts.append(
+            '<div style="font-size:12px;color:#9a9285;margin:-4px 0 10px">'
+            '共 %d 个 IP、%d 次请求，均未计入上面的 PV / UV</div>'
+            % (stats["bot_ips"], stats["bot_hits"])
+        )
+        parts.append('<table style="width:100%;border-collapse:collapse">')
+        parts.append(
+            '<tr><th style="%s">IP</th><th style="%s">来源</th>'
+            '<th style="%s;text-align:right">请求</th>'
+            '<th style="%s;text-align:right">页面</th></tr>'
+            % (css_th, css_th, css_th, css_th)
+        )
+        for b in stats["bots"]:
+            note = ('<span style="color:#a14b3d;font-size:11px"> · %d 个 404</span>' % b["notfound"]) \
+                if b["notfound"] else ""
+            parts.append(
+                '<tr><td style="%s;font-family:SFMono-Regular,Menlo,monospace;font-size:12px">%s</td>'
+                '<td style="%s">%s%s</td>'
+                '<td style="%s;text-align:right">%d</td>'
+                '<td style="%s;text-align:right;color:#9a9285">%d</td></tr>'
+                % (css_td, e(b["ip"]), css_td, e(b["name"]), note,
+                   css_td, b["hits"], css_td, b["paths"])
+            )
+        parts.append('</table>')
+        if len(stats["bots"]) >= 15 and stats["bot_ips"] > 15:
+            parts.append('<div style="margin-top:8px;font-size:12px;color:#9a9285">'
+                         '仅显示请求量最高的 15 个，其余 %d 个已略去</div>'
+                         % (stats["bot_ips"] - 15))
+        parts.append('</div>')
+
+    # UA 看着像真人、但量大得不正常的 IP
+    if stats["heavy_ips"]:
+        parts.append('<div style="%s"><h2 style="%s">高频访问 IP</h2>' % (css_card, css_h2))
+        parts.append('<div style="font-size:12px;color:#9a9285;margin:-4px 0 10px">'
+                     'UA 声称是普通浏览器，但请求量不像真人，可能是伪装的爬虫或扫描器</div>')
+        parts.append('<table style="width:100%;border-collapse:collapse">')
+        for h in stats["heavy_ips"]:
+            parts.append(
+                '<tr><td style="%s;font-family:SFMono-Regular,Menlo,monospace;font-size:12px">%s</td>'
+                '<td style="%s;text-align:right">%d 次请求</td>'
+                '<td style="%s;text-align:right;color:#9a9285">%d 个页面</td></tr>'
+                % (css_td, e(h["ip"]), css_td, h["hits"], css_td, h["paths"])
+            )
+        parts.append('</table></div>')
 
     # 异常
     if stats["not_found"] or stats["errors"]:
