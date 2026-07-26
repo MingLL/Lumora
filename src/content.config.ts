@@ -8,7 +8,7 @@ const blog = defineCollection({
     title: z.string(),
     description: z.string(),
     date: z.coerce.date(),
-    category: z.enum(['关于我', '成长手记', '北京生活', '扫街周记', '城记远方']),
+    category: z.enum(['关于我', '成长手记', '北京生活', '扫街周记', '城记远方', '年终总结']),
     tags: z.array(z.string()).default([]),
     city: z.string().optional().default(''),
     cover: z.string().optional().default(''),

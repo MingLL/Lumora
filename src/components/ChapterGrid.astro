@@ -8,14 +8,18 @@ interface Props {
 
 const { posts } = Astro.props;
 
+// 每个章节最多列 5 篇，多的走「共 N 篇」进归档筛选，
+// 否则扫街周记这种几十篇的章节会把整行撑垮
+const MAX_PER_CHAPTER = 5;
+
 const chapters = chapterOrder
-  .map((category) => ({
-    category,
-    entries: posts
+  .map((category) => {
+    const all = posts
       .filter((post) => post.data.category === category)
-      .sort((a, b) => a.data.date.getTime() - b.data.date.getTime())
-  }))
-  .filter((chapter) => chapter.entries.length > 0);
+      .sort((a, b) => a.data.date.getTime() - b.data.date.getTime());
+    return { category, entries: all.slice(0, MAX_PER_CHAPTER), total: all.length };
+  })
+  .filter((chapter) => chapter.total > 0);
 ---
 
 <section id="chapters" class="container-page mt-[130px] scroll-mt-24">
@@ -39,6 +43,12 @@ const chapters = chapterOrder
             {chapter.entries.map((post) => (
               <a class="text-muted hover:text-accent" href={`/posts/${post.id}`}>· {post.data.title}</a>
             ))}
+            {chapter.total > chapter.entries.length && (
+              <a
+                class="mt-1.5 font-mono text-[12px] tracking-[0.06em] text-faint hover:text-accent"
+                href={`/archive?category=${encodeURIComponent(chapter.category)}`}
+              >共 {chapter.total} 篇 →</a>
+            )}
           </span>
         </div>
       ))}

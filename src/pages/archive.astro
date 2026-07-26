@@ -31,7 +31,7 @@ const formatDate = (date: Date) => date.toLocaleDateString('zh-CN', {
     </div>
     <div class="mt-10 space-y-10" data-post-list>
       {years.map((year) => (
-        <section data-year-section>
+        <section id={`y${year}`} class="scroll-mt-24" data-year-section>
           <h2 class="font-serif text-2xl text-ink">{year}</h2>
           <div class="mt-4 space-y-3">
             {posts.filter((post) => post.data.date.getFullYear() === year).map((post) => (

@@ -11,11 +11,15 @@ const { posts } = Astro.props;
 const sorted = [...posts].sort((a, b) => b.data.date.getTime() - a.data.date.getTime());
 const firstEverId = sorted.length ? sorted[sorted.length - 1].id : '';
 
+// 每年最多列 5 篇，其余走「该年共 N 篇」进归档，
+// 否则一年二十几篇扫街周记会把首页拉到一万像素以上
+const MAX_PER_YEAR = 5;
+
 const years = [...new Set(sorted.map((post) => post.data.date.getFullYear()))].sort((a, b) => b - a);
-const groups = years.map((year) => ({
-  year,
-  entries: sorted.filter((post) => post.data.date.getFullYear() === year)
-}));
+const groups = years.map((year) => {
+  const all = sorted.filter((post) => post.data.date.getFullYear() === year);
+  return { year, entries: all.slice(0, MAX_PER_YEAR), total: all.length };
+});
 
 const ym = (date: Date) => `${date.getFullYear()}.${String(date.getMonth() + 1).padStart(2, '0')}`;
 ---
@@ -54,6 +58,12 @@ const ym = (date: Date) => `${date.getFullYear()}.${String(date.getMonth() + 1).
             </a>
           );
         })}
+        {group.total > group.entries.length && (
+          <a
+            class="block border-l border-line py-4 pl-[30px] font-mono text-[12px] tracking-[0.06em] text-faint hover:text-accent"
+            href={`/archive#y${group.year}`}
+          >{group.year} 年共 {group.total} 篇 →</a>
+        )}
       </div>
     </div>
   ))}

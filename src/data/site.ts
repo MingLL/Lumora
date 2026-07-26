@@ -19,11 +19,12 @@ export const categoryDescriptions: Record<string, string> = {
   成长手记: '记录一个普通年轻人从校园、职场、城市到自我重建的过程。',
   北京生活: '北京，是我走进世界的第一站。',
   扫街周记: '用镜头记录城市，也记录那个正在变好的自己。',
-  城记远方: '走过一些城市，也走过一些阶段。'
+  城记远方: '走过一些城市，也走过一些阶段。',
+  年终总结: '每年年末，把这一年重新讲一遍。'
 };
 
 // 章节入口的展示顺序与中文序号（章节由本地文章按 category 聚合而成）
-export const chapterOrder = ['关于我', '成长手记', '北京生活', '扫街周记', '城记远方'] as const;
+export const chapterOrder = ['关于我', '成长手记', '年终总结', '北京生活', '扫街周记', '城记远方'] as const;
 export const chapterNumerals = ['壹', '贰', '叁', '肆', '伍', '陆'];
 
 // 首屏文案

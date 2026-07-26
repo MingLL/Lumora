@@ -435,6 +435,27 @@ img {
   box-shadow: 0 16px 42px rgba(64, 47, 31, 0.1);
 }
 
+/* 从公众号导入的正文以 <figure> + <figcaption> 承载配图和图注 */
+.prose-warm figure {
+  margin: 2.4rem 0;
+}
+
+.prose-warm figure img {
+  display: block;
+  width: 100%;
+  margin: 0;
+}
+
+.prose-warm figcaption {
+  margin-top: 0.7rem;
+  color: var(--faint);
+  font-family: "IBM Plex Mono", "SFMono-Regular", "Menlo", monospace;
+  font-size: 12.5px;
+  letter-spacing: 0.04em;
+  line-height: 1.7;
+  text-align: right;
+}
+
 .focus-ring {
   outline: 2px solid transparent;
   outline-offset: 3px;
