@@ -70,6 +70,18 @@ const formatDate = (date: Date) => date.toLocaleDateString('zh-CN', {
     // 文章页底部的 #标签 链接过来时直接预选中该标签
     const tagFromUrl = params.get('tag') || '';
     let activeTag = tagButtons.some((button) => button.dataset.tag === tagFromUrl) ? tagFromUrl : '';
+    if (input) input.value = params.get('q') || '';
+
+    // 把筛选状态写回地址栏：从文章返回时能还原筛选，链接也能直接分享。
+    // 用 replaceState 而不是 pushState，免得每点一次筛选都多压一条历史。
+    const syncUrl = (keyword: string) => {
+      const next = new URLSearchParams();
+      if (activeCategory && activeCategory !== '全部') next.set('category', activeCategory);
+      if (activeTag) next.set('tag', activeTag);
+      if (keyword) next.set('q', keyword);
+      const query = next.toString();
+      history.replaceState(null, '', query ? `${location.pathname}?${query}` : location.pathname);
+    };
 
     const paintButtons = () => {
       buttons.forEach((button) => {
@@ -103,6 +115,7 @@ const formatDate = (date: Date) => date.toLocaleDateString('zh-CN', {
       });
       empty?.classList.toggle('hidden', visibleCount !== 0);
       paintButtons();
+      syncUrl(keyword);
     };
 
     buttons.forEach((button) => button.addEventListener('click', () => {

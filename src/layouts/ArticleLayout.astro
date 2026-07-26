@@ -23,7 +23,12 @@ const minutes = Math.max(1, Math.round((post.body ?? '').replace(/\s/g, '').leng
 <SiteLayout title={post.data.title} description={post.data.description} image={post.data.cover || undefined}>
   <article class="container-page pb-20 pt-9 md:pt-12">
     <div class="mx-auto max-w-[720px]">
-      <a class="font-mono text-[12.5px] tracking-[0.08em] text-faint hover:text-accent" href="/archive">← 返回归档</a>
+      {/* 默认回归档；有同源来路时改为回到进入这篇文章的那一页 */}
+      <a
+        class="font-mono text-[12.5px] tracking-[0.08em] text-faint hover:text-accent"
+        href="/archive"
+        data-back-link
+      >← 返回归档</a>
     </div>
 
     <header class="mx-auto max-w-[720px] text-center">
@@ -97,4 +102,42 @@ const minutes = Math.max(1, Math.round((post.body ?? '').replace(/\s/g, '').leng
       <div class="mt-12"><SubscribeCard compact /></div>
     </div>
   </article>
+
+  <script>
+    // 返回链接跟随来路：从首页/扫街/城市地图点进来，就回到那一页，
+    // 而不是一律回归档。直接打开或站外进来时保持默认的 /archive。
+    const link = document.querySelector<HTMLAnchorElement>('[data-back-link]');
+    const labels: Record<string, string> = {
+      '/': '首页',
+      '/archive': '归档',
+      '/street': '扫街周记',
+      '/cities': '城市地图',
+      '/timeline': '成长时间线',
+      '/about': '关于'
+    };
+
+    if (link && document.referrer) {
+      try {
+        const from = new URL(document.referrer);
+        const path = from.pathname.replace(/\/$/, '') || '/';
+        const label = labels[path] ?? (path.startsWith('/posts/') ? '上一页' : '');
+        if (from.origin === location.origin && label && from.pathname !== location.pathname) {
+          link.textContent = `← 返回${label}`;
+          // 保留 href，中键和右键新标签页才有意义
+          link.href = from.pathname + from.search + from.hash;
+          link.addEventListener('click', (event) => {
+            // 走 history.back() 才能保住归档页的筛选状态和滚动位置；
+            // 新标签页打开时 history 只有一条，交给 href 正常跳转
+            if (event.metaKey || event.ctrlKey || event.shiftKey || event.button !== 0) return;
+            if (history.length > 1) {
+              event.preventDefault();
+              history.back();
+            }
+          });
+        }
+      } catch {
+        /* referrer 不是合法 URL 时保持默认 */
+      }
+    }
+  </script>
 </SiteLayout>
