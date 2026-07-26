@@ -1,0 +1,202 @@
+# 远方有温度 —— 静态站点部署清单
+#
+# 站点是纯静态产物，由 nginx 直接 serve。每个节点跑一个 nginx（DaemonSet），
+# 读取本机 /opt/lumora/site 下的文件，所以发布 = 把 dist/ 同步到两台机器。
+# 对外经由 k3s 自带的 Traefik 暴露在 80 端口。
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: lumora
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: lumora-nginx
+  namespace: lumora
+data:
+  nginx.conf: |
+    worker_processes auto;
+    error_log /var/log/nginx/error.log warn;
+    pid /var/run/nginx.pid;
+
+    events {
+        worker_connections 1024;
+    }
+
+    http {
+        include       /etc/nginx/mime.types;
+        default_type  application/octet-stream;
+        charset utf-8;
+
+        # 真实客户端 IP 由 Traefik 通过 X-Forwarded-For 传入
+        log_format main '$remote_addr "$http_x_forwarded_for" [$time_local] '
+                        '"$request" $status $body_bytes_sent "$http_referer" "$http_user_agent"';
+        access_log /var/log/nginx/access.log main;
+
+        sendfile on;
+        tcp_nopush on;
+        keepalive_timeout 65;
+        server_tokens off;
+
+        gzip on;
+        gzip_vary on;
+        gzip_min_length 1024;
+        gzip_comp_level 6;
+        gzip_types text/plain text/css text/javascript application/javascript
+                   application/json application/xml application/rss+xml
+                   application/atom+xml image/svg+xml;
+
+        server {
+            listen 80 default_server;
+            server_name _;
+            root /usr/share/nginx/html;
+            index index.html;
+
+            # 说明：这里一律用 add_header 而不用 expires 指令 —— expires 自己也会
+            # 生成一个 Cache-Control，两者并用会让响应里出现重复的头。
+
+            # 构建产物文件名带内容 hash，可以放心长期强缓存
+            location /_astro/ {
+                add_header Cache-Control "public, max-age=31536000, immutable";
+                access_log off;
+            }
+
+            # 字体文件名带内容 hash（见 scripts/build-fonts.py），重新生成时 URL 会变，
+            # 所以可以和构建产物一样永久强缓存
+            location /fonts/ {
+                add_header Cache-Control "public, max-age=31536000, immutable";
+                types { font/woff2 woff2; }
+                default_type font/woff2;
+                access_log off;
+            }
+
+            # 图片是站点的大头（35M），缓存久一点
+            location /images/ {
+                add_header Cache-Control "public, max-age=2592000";
+                access_log off;
+            }
+
+            location = /favicon.svg {
+                add_header Cache-Control "public, max-age=2592000";
+                access_log off;
+            }
+
+            # RSS / sitemap 更新后要能被及时抓取，缓存放短
+            location ~ ^/(rss\.xml|sitemap.*\.xml|robots\.txt)$ {
+                add_header Cache-Control "public, max-age=3600";
+            }
+
+            # HTML 不缓存，保证发布后刷新即可见新内容
+            location / {
+                add_header Cache-Control "no-cache";
+                # Astro 输出的是 目录/index.html，$uri/ 交给 index 指令兜底
+                try_files $uri $uri/ =404;
+            }
+
+            error_page 404 /404.html;
+            location = /404.html {
+                add_header Cache-Control "no-cache";
+            }
+        }
+    }
+---
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: lumora-web
+  namespace: lumora
+  labels:
+    app: lumora-web
+spec:
+  selector:
+    matchLabels:
+      app: lumora-web
+  updateStrategy:
+    type: RollingUpdate
+  template:
+    metadata:
+      labels:
+        app: lumora-web
+      annotations:
+        # deploy.sh 在 apply 时把本文件的内容 hash 填进来：
+        # 清单（含上面的 nginx.conf）变了才滚动重启，只同步静态文件时 pod 不动。
+        lumora/manifest-hash: "__MANIFEST_HASH__"
+    spec:
+      containers:
+        - name: nginx
+          # Docker 官方 nginx 的 AWS ECR Public 镜像站
+          # （阿里云机器直连 Docker Hub 不通，registry.cn-hangzhou 又只代理 k8s 组件）
+          image: public.ecr.aws/docker/library/nginx:1.29-alpine
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 80
+          volumeMounts:
+            - name: site
+              mountPath: /usr/share/nginx/html
+              readOnly: true
+            - name: nginx-conf
+              mountPath: /etc/nginx/nginx.conf
+              subPath: nginx.conf
+              readOnly: true
+          resources:
+            requests:
+              cpu: 10m
+              memory: 24Mi
+            limits:
+              cpu: 500m
+              memory: 128Mi
+          readinessProbe:
+            httpGet:
+              path: /
+              port: http
+            initialDelaySeconds: 2
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 30
+      volumes:
+        - name: site
+          hostPath:
+            path: /opt/lumora/site
+            type: Directory
+        - name: nginx-conf
+          configMap:
+            name: lumora-nginx
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: lumora-web
+  namespace: lumora
+spec:
+  selector:
+    app: lumora-web
+  ports:
+    - name: http
+      port: 80
+      targetPort: http
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: lumora-web
+  namespace: lumora
+spec:
+  ingressClassName: traefik
+  # 不写 host，任何 Host 头都能命中 —— IP 直接访问也走这条规则。
+  # 域名到位后在这里加 host 段和 TLS，见 deploy/README.md。
+  rules:
+    - http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: lumora-web
+                port:
+                  number: 80

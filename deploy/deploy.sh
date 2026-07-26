@@ -1,0 +1,72 @@
+#!/usr/bin/env bash
+#
+# 一键发布：本地构建 → 同步到两台服务器 → 应用 k8s 清单
+#
+#   ./deploy/deploy.sh                只发内容（默认，先构建）
+#   ./deploy/deploy.sh --skip-build   跳过构建，直接发已有的 dist/
+#
+# 站点是纯静态的，服务器上不需要 Node —— 构建在本地完成，只把 dist/ 推上去。
+set -euo pipefail
+
+HOSTS=(dev1 dev2)
+CONTROL_HOST=dev1                          # 跑 kubectl 的节点（k3s control-plane）
+SITE_IPS=(47.120.54.233 47.120.64.186)
+REMOTE_DIR=/opt/lumora/site
+
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+cd "$REPO_ROOT"
+
+step() { printf '\n\033[1;34m==>\033[0m %s\n' "$*"; }
+fail() { printf '\033[1;31m错误:\033[0m %s\n' "$*" >&2; exit 1; }
+
+skip_build=false
+[[ "${1:-}" == "--skip-build" ]] && skip_build=true
+
+if [[ "$skip_build" == false ]]; then
+  step "本地构建"
+  npm run build
+else
+  step "跳过构建，使用现有 dist/"
+fi
+
+[[ -f dist/index.html ]] || fail "dist/index.html 不存在，请先执行 npm run build"
+
+step "同步静态文件 → ${HOSTS[*]}"
+for h in "${HOSTS[@]}"; do
+  printf '    %s ' "$h"
+  # --delete 让服务器上的文件与 dist/ 严格一致，删掉的页面不会留下孤儿。
+  # 不用 --chmod：macOS 自带的是 openrsync，不支持该参数；权限在下一步统一校正。
+  rsync -az --delete dist/ "$h:$REMOTE_DIR/"
+  ssh "$h" "chmod -R a+rX '$REMOTE_DIR'"
+  printf '✓\n'
+done
+
+step "应用 k8s 清单"
+manifest_hash=$(shasum -a 256 deploy/k8s/lumora.yaml | cut -c1-12)
+sed "s/__MANIFEST_HASH__/$manifest_hash/" deploy/k8s/lumora.yaml \
+  | ssh "$CONTROL_HOST" 'cat > /tmp/lumora.yaml && k3s kubectl apply -f /tmp/lumora.yaml'
+
+step "等待 pod 就绪"
+ssh "$CONTROL_HOST" 'k3s kubectl rollout status daemonset/lumora-web -n lumora --timeout=120s'
+
+step "验证公网访问"
+unreachable=()
+for ip in "${SITE_IPS[@]}"; do
+  # curl 失败时 %{http_code} 本身就输出 000，不要再 || echo 叠加一次
+  code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 10 "http://$ip/" 2>/dev/null || true)
+  if [[ "$code" == "200" ]]; then
+    printf '    http://%-16s → \033[1;32m200\033[0m\n' "$ip"
+  else
+    printf '    http://%-16s → \033[1;31m%s\033[0m\n' "$ip" "${code:-000}"
+    unreachable+=("$ip")
+  fi
+done
+
+if (( ${#unreachable[@]} )); then
+  # pod 已经 rollout 成功了，所以公网不通几乎都是安全组没放行 80，而不是应用问题
+  printf '\n\033[1;33m注意:\033[0m 以下 IP 公网不可达：%s\n' "${unreachable[*]}"
+  printf '      pod 已就绪，通常是阿里云安全组未放行 80 端口入方向。\n'
+  printf '      排查：ssh %s "k3s kubectl -n lumora get pod -o wide"\n' "$CONTROL_HOST"
+  exit 1
+fi
+printf '\n\033[1;32m发布完成。\033[0m\n'
