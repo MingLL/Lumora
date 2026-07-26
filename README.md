@@ -110,6 +110,36 @@ public/images/qrcode/wechat-qrcode.svg
 
 也可以在 `src/data/site.ts` 修改 `qrcode` 路径。
 
+## 字体
+
+站点用 Noto Serif SC（正文）、IBM Plex Mono（等宽）、Ma Shan Zheng（手写体装饰）。
+字体是**自托管**的，不走 Google Fonts —— 后者在国内不可达，加载必然失败。
+
+字体文件由脚本按站点实际用到的字符子集化生成，完整字库 6.9MB 压到约 1.2MB：
+
+```bash
+npm run build && npm run fonts
+```
+
+需要 Python 依赖：`python3 -m pip install --user fonttools brotli`。
+
+产物是 `public/fonts/*.woff2`（文件名带内容 hash，可永久缓存）、
+`src/styles/fonts.css`（@font-face）和 `src/data/fonts.json`（预加载清单），
+三者都要提交进仓库。新增文章后重新跑一次，脚本会报告哪些字符缺字形。
+
+## 部署
+
+站点已部署在自有服务器（dev1 / dev2 上的 k3s 集群），当前可通过
+http://47.120.54.233 访问。
+
+```bash
+./deploy/deploy.sh          # 构建 + 同步到两台服务器 + 应用 k8s 清单
+```
+
+架构说明、接域名和 HTTPS 的步骤、排查命令见 [deploy/README.md](deploy/README.md)。
+
+以下是托管平台的备选方案。
+
 ## 部署到 Vercel
 
 1. 将项目推送到 GitHub。

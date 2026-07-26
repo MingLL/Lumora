@@ -7,3 +7,6 @@ dist/
 
 # Local reference exports
 \# 远方有温度网站设计方案__## 一、设计理解__这不是一个_秀_/
+
+# 字体源文件缓存（子集化的输入，产物在 public/fonts/）
+.font-cache/
