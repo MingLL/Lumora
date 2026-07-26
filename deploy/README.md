@@ -149,6 +149,69 @@ spec:
         - 你的域名
 ```
 
+## 每日访问日报
+
+每天早上 07:00（服务器时区就是 CST，不用换算）把前一天的访问情况发到邮箱。
+内容包括 PV/UV 及环比、热门页面（带文章标题）、来源与设备构成、404 与服务器错误、时段分布。
+
+安装（可反复执行，不会覆盖已填好的凭证）：
+
+```bash
+./deploy/setup-report.sh
+```
+
+然后填发信凭证 —— 这一步只能手动，密码不进仓库：
+
+```bash
+ssh dev1
+vi /etc/lumora/report.env      # 填 SMTP_USER 和 SMTP_PASS
+```
+
+`SMTP_PASS` 要的是**授权码不是登录密码**：登录 mail.qq.com → 设置 → 账户 →
+开启「IMAP/SMTP 服务」→ 生成授权码。
+
+填好后自检：
+
+```bash
+ssh dev1 '/opt/lumora/bin/daily-report.py test-mail'                    # 发测试信
+ssh dev1 '/opt/lumora/bin/daily-report.py report --dry-run'             # 只生成不发送
+ssh dev1 '/opt/lumora/bin/daily-report.py report --date 2026-07-27 --dry-run'  # 补看某天
+```
+
+### 它是怎么工作的
+
+```
+每小时 :05   daily-report.py collect  ──→ /var/log/lumora/access-YYYY-MM-DD.log
+每天 07:00   daily-report.py report   ──→ 统计前一天 ──→ QQ SMTP(465) ──→ 邮箱
+```
+
+几个绕不开的约束，决定了它为什么长这样：
+
+- **日志用 `kubectl logs` 收，不读文件。** nginx 跑在两个节点上各写各的，而 dev1
+  没法 ssh 到 dev2，`kubectl logs -l app=lumora-web` 能一次把两个节点的日志都拉过来。
+- **为什么每小时归档一次。** `kubectl logs` 读的是容器日志，pod 一重启就只剩新容器的
+  内容。每小时落盘，pod 重启最多影响一小时，而不是整份日报。归档保留 90 天。
+- **必须走 465/587。** 阿里云 ECS 封禁 25 端口出站，所以 `mail`/`sendmail` 都用不了，
+  脚本直接用 Python smtplib 走 SSL。
+- **健康检查要过滤掉。** k8s 的存活探针每 10 秒请求一次首页，不滤掉的话真实访客会被
+  完全淹没。统计里也把爬虫单独拎出来，不计入 PV/UV。
+- **日志时间是 UTC，统计按 CST。** 容器里没有时区数据，所以 nginx 记的是 UTC，
+  脚本负责转换 —— 别看到日志里是 16:00 就以为出错了。
+
+只有 HTML 页面会进统计：nginx 对 `/images/`、`/_astro/`、`/fonts/` 都关了 access_log，
+所以 PV 天然就是页面浏览量，不含静态资源。
+
+### 排查日报
+
+```bash
+ssh dev1 'tail -30 /var/log/lumora/cron.log'        # cron 执行记录
+ssh dev1 'wc -l /var/log/lumora/access-*.log'       # 归档是否在增长
+ssh dev1 'crontab -l'                                # 定时任务是否还在
+ssh dev1 'cat /var/log/lumora/.collect-state'       # 上次收集到哪个时间点
+```
+
+没收到邮件时，先跑一次 `test-mail` 看是 SMTP 的问题还是统计的问题。
+
 ## 排查
 
 ```bash
