@@ -6,7 +6,7 @@ interface Props {
   caption?: string;
 }
 
-const { photo = '', caption = '扫街周记 · 用镜头记录街头' } = Astro.props;
+const { photo = '', caption = '扫街周记 · 街头随手拍' } = Astro.props;
 ---
 
 <section
@@ -50,7 +50,7 @@ const { photo = '', caption = '扫街周记 · 用镜头记录街头' } = Astro.
   </div>
 
   <div class="flex shrink-0 flex-row justify-end gap-[30px]">
-    <div class="hero-side">认真生活，认真记录</div>
+    <div class="hero-side">一个普通人的这些年</div>
     <div class="hero-titlewrap">
       <h1 class="hero-title">{site.name}</h1>
       <div class="seal-mark p-[12px_9px_8px] text-[21px] tracking-[0.24em]">{site.author}</div>

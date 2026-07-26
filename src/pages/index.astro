@@ -16,7 +16,7 @@ const heroSource = streetPosts.find((post) => post.data.cover) ?? posts.find((po
 const heroPhoto = heroSource?.data.cover ?? '';
 const heroCaption = heroSource
   ? `${heroSource.data.title} · ${heroSource.data.date.getFullYear()}.${String(heroSource.data.date.getMonth() + 1).padStart(2, '0')}`
-  : '扫街周记 · 用镜头记录街头';
+  : '扫街周记 · 街头随手拍';
 ---
 
 <SiteLayout>

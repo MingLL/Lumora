@@ -15,12 +15,12 @@ const written = cityGroups.filter((city) => city.posts.length > 0);
 const pending = cityGroups.filter((city) => city.posts.length === 0);
 ---
 
-<SiteLayout title="城市地图" description="按城市整理远方有温度里的生活、旅行和阶段记忆。">
+<SiteLayout title="城市地图" description="按城市整理这些年待过、路过的地方。">
   <section class="container-page py-12 md:py-16">
     <div class="max-w-3xl">
       <p class="text-sm text-accent">CITY MAP</p>
       <h1 class="mt-3 font-serif text-4xl text-ink md:text-6xl">城市地图</h1>
-      <p class="mt-5 text-lg leading-8 text-muted">先不用真实地图 API。把城市当作章节，把每一次抵达、停靠和告别，都放在一个可以慢慢打开的位置。</p>
+      <p class="mt-5 text-lg leading-8 text-muted">上学、上班、旅行，前后待过几座城市。有的住了三年，有的只是路过几天。</p>
     </div>
     <div class="mt-10 grid gap-5 md:grid-cols-2 lg:grid-cols-3">
       {written.map((city, index) => (
