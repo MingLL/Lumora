@@ -19,17 +19,21 @@
 src/
   components/        # 站点组件
   content/
-    blog/           # Markdown 文章
-    config.ts       # 内容集合 schema
+    blog/           # Markdown 文章 —— 符号链接，指向私有内容仓库
+  content.config.ts # 内容集合 schema
   data/             # 站点配置、时间线、城市数据
   layouts/          # 站点布局和文章布局
   pages/            # 页面路由
   styles/           # 全局样式
 public/
-  images/
-    covers/         # 文章封面图
-    qrcode/         # 公众号二维码
+  images/           # 文章配图、封面、二维码 —— 符号链接，指向私有内容仓库
+  fonts/            # 子集化后的字体产物
+  favicon.svg
 ```
+
+**文章正文和图片不在这个仓库里**，它们在私有仓库 `MingLL/lumora-content`。
+上面两处符号链接由仓库根目录的 `./scripts/setup-content.sh` 建立，跑一次即可；
+不跑的话文章集合为空，构建出来没有文章页。
 
 ## 安装依赖
 

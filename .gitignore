@@ -10,3 +10,9 @@ dist/
 
 # 字体源文件缓存（子集化的输入，产物在 public/fonts/）
 .font-cache/
+
+# 文章正文与配图在私有仓库 MingLL/lumora-content 里，不进这个公开仓库。
+# content/ 是它的克隆，下面两个是指回去的符号链接——都由 scripts/setup-content.sh 建立。
+content/
+frontend/src/content/blog
+frontend/public/images

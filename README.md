@@ -4,12 +4,26 @@
 每日邮件日报的 Spring Boot 服务。
 
 ```text
-frontend/     Astro 静态站（内容、组件、字体子集脚本）
+frontend/     Astro 静态站（组件、字体子集脚本）
 backend/      Spring Boot 服务（微信回调、日报、MySQL）
 deploy/       前后端的 k3s 部署清单、发布脚本与契约测试
-scripts/      服务器上跑的运维脚本（nginx 访问日报）
+scripts/      运维脚本（nginx 访问日报）与内容仓库的挂载脚本
 docs/         设计与方案文档
+content/      文章正文与配图，来自私有仓库，不在本仓库里（见下）
 ```
+
+## 文章内容不在这个仓库
+
+站点的文章正文与配图放在私有仓库 `MingLL/lumora-content`。本仓库只有代码。
+克隆后先执行一次：
+
+```bash
+./scripts/setup-content.sh
+```
+
+它把内容仓库克隆到 `content/`，再用两条符号链接挂回 Astro 期望的位置
+（`frontend/src/content/blog` 和 `frontend/public/images`）。这两个路径和 `content/`
+都在 `.gitignore` 里。**不跑这一步，`npm run build` 会因为文章集合为空而产不出文章页。**
 
 ## 两个子项目
 
@@ -28,6 +42,7 @@ docs/         设计与方案文档
 前端：
 
 ```bash
+./scripts/setup-content.sh   # 只需一次，把文章内容挂进来
 cd frontend
 npm install
 npm run dev          # http://localhost:4321
