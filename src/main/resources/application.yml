@@ -34,20 +34,20 @@ management:
         enabled: true
 
 lumora:
-  wechat-app-id: ${WECHAT_APP_ID}
-  wechat-original-id: ${WECHAT_ORIGINAL_ID}
-  wechat-token: ${WECHAT_TOKEN}
-  wechat-aes-key: ${WECHAT_AES_KEY}
-  mysql-host: ${MYSQL_HOST}
+  wechat-app-id: ${WECHAT_APP_ID:}
+  wechat-original-id: ${WECHAT_ORIGINAL_ID:}
+  wechat-token: ${WECHAT_TOKEN:}
+  wechat-aes-key: ${WECHAT_AES_KEY:}
+  mysql-host: ${MYSQL_HOST:}
   mysql-port: ${MYSQL_PORT:3306}
-  mysql-database: ${MYSQL_DATABASE}
-  mysql-username: ${MYSQL_USERNAME}
-  mysql-password: ${MYSQL_PASSWORD}
-  mail-username: ${MAIL_USERNAME}
-  mail-auth-code: ${MAIL_AUTH_CODE}
+  mysql-database: ${MYSQL_DATABASE:}
+  mysql-username: ${MYSQL_USERNAME:}
+  mysql-password: ${MYSQL_PASSWORD:}
+  mail-username: ${MAIL_USERNAME:}
+  mail-auth-code: ${MAIL_AUTH_CODE:}
   mail-from-name: ${MAIL_FROM_NAME:Lumora}
-  report-recipients: ${REPORT_RECIPIENTS}
-  report-admin-key: ${REPORT_ADMIN_KEY}
+  report-recipients: ${REPORT_RECIPIENTS:}
+  report-admin-key: ${REPORT_ADMIN_KEY:}
   zone: ${LUMORA_ZONE:Asia/Shanghai}
   scheduling-enabled: ${SCHEDULING_ENABLED:true}
   report-recovery-enabled: ${REPORT_RECOVERY_ENABLED:true}
