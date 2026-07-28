@@ -126,6 +126,76 @@ class EventDeduplicationKeyTest {
     }
 
     @Test
+    void acceptsCoordinateBoundariesAndCanonicalizesThem() {
+        assertThat(EventDeduplicationKey.canonicalLatitude(new BigDecimal("-90.0000000")))
+                .isEqualTo("-90");
+        assertThat(EventDeduplicationKey.canonicalLatitude(new BigDecimal("90")))
+                .isEqualTo("90");
+        assertThat(EventDeduplicationKey.canonicalLongitude(new BigDecimal("-180.0000000")))
+                .isEqualTo("-180");
+        assertThat(EventDeduplicationKey.canonicalLongitude(new BigDecimal("180")))
+                .isEqualTo("180");
+        assertThat(EventDeduplicationKey.canonicalPrecision(BigDecimal.ZERO)).isEqualTo("0");
+        assertThat(EventDeduplicationKey.canonicalPrecision(
+                        new BigDecimal("999999.999999")))
+                .isEqualTo("999999.999999");
+    }
+
+    @Test
+    void rejectsOutOfRangeCoordinatesAndPrecision() {
+        assertThatThrownBy(() ->
+                        EventDeduplicationKey.canonicalLatitude(new BigDecimal("90.0000001")))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("latitude");
+        assertThatThrownBy(() ->
+                        EventDeduplicationKey.canonicalLatitude(new BigDecimal("-90.0000001")))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("latitude");
+        assertThatThrownBy(() ->
+                        EventDeduplicationKey.canonicalLongitude(new BigDecimal("180.0000001")))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("longitude");
+        assertThatThrownBy(() ->
+                        EventDeduplicationKey.canonicalLongitude(new BigDecimal("-180.0000001")))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("longitude");
+        assertThatThrownBy(() ->
+                        EventDeduplicationKey.canonicalPrecision(new BigDecimal("-0.000001")))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("precision");
+        assertThatThrownBy(() ->
+                        EventDeduplicationKey.canonicalPrecision(new BigDecimal("1000000")))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("precision");
+    }
+
+    @Test
+    void rejectsCoordinateScaleBeyondStorageLimits() {
+        assertThatThrownBy(() ->
+                        EventDeduplicationKey.canonicalLatitude(new BigDecimal("1.12345678")))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("scale");
+        assertThatThrownBy(() ->
+                        EventDeduplicationKey.canonicalLongitude(new BigDecimal("1.12345678")))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("scale");
+        assertThatThrownBy(() ->
+                        EventDeduplicationKey.canonicalPrecision(new BigDecimal("1.1234567")))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("scale");
+    }
+
+    @Test
+    void rejectsExtremeCoordinateExponentBeforePlainStringAllocation() {
+        BigDecimal extreme = new BigDecimal("1E+2147483647");
+        var message = baseMessage().latitude(extreme).build();
+
+        assertThatThrownBy(() -> EventDeduplicationKey.forMessage(message))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("latitude");
+    }
+
+    @Test
     void fixedFieldOrderCannotBeChangedWithoutChangingFingerprint() {
         var first = baseMessage().appId("left").openId("right").build();
         var swapped = baseMessage().appId("right").openId("left").build();
@@ -178,6 +248,22 @@ class EventDeduplicationKeyTest {
     }
 
     @Test
+    void compositeScalarTypeTagsPreventNumericCrossTypeCollisions() {
+        assertThat(List.of(
+                        compositeSha256(compositeWithValue("1")),
+                        compositeSha256(compositeWithValue(1)),
+                        compositeSha256(compositeWithValue(BigInteger.ONE)),
+                        compositeSha256(compositeWithValue(BigDecimal.ONE))))
+                .doesNotHaveDuplicates();
+    }
+
+    @Test
+    void compositeScalarTypeTagsPreventBooleanStringCollision() {
+        assertThat(compositeSha256(compositeWithValue("true")))
+                .isNotEqualTo(compositeSha256(compositeWithValue(true)));
+    }
+
+    @Test
     void compositeTypeAndItemCountParticipateInOuterFingerprint() {
         Map<String, Object> content = Map.of("Value", "same");
         var first = baseMessage()
@@ -227,15 +313,15 @@ class EventDeduplicationKeyTest {
                 encodedBytes(descriptor));
 
         assertThat(contentSha256)
-                .isEqualTo("4dd5f410ed63be15a91d4b01c3c2d9be5994df345490f5a02f755f5d7e3ad3f8");
+                .isEqualTo("9e4324c468f8f04106f3a5c03555856c4ef542bfd17b6e2982d9042ac187bfc0");
         assertThat(EventDeduplicationKey.compositeFingerprint(composite)
                         .orElseThrow()
                         .contentSha256())
-                .isEqualTo("4dd5f410ed63be15a91d4b01c3c2d9be5994df345490f5a02f755f5d7e3ad3f8");
+                .isEqualTo("9e4324c468f8f04106f3a5c03555856c4ef542bfd17b6e2982d9042ac187bfc0");
         assertThat(completeDeduplicationKey)
-                .isEqualTo("sha256:51def753bc8a607dba99c94247373cf6f1f6b04a75727c3f5647fca98c2c9f91");
+                .isEqualTo("sha256:3a0ff19509b5a9c55fc15557a3ce9eb511b1bf542811296ce12f76f3058571f0");
         assertThat(EventDeduplicationKey.forMessage(message))
-                .isEqualTo("sha256:51def753bc8a607dba99c94247373cf6f1f6b04a75727c3f5647fca98c2c9f91");
+                .isEqualTo("sha256:3a0ff19509b5a9c55fc15557a3ce9eb511b1bf542811296ce12f76f3058571f0");
     }
 
     @Test
@@ -294,6 +380,17 @@ class EventDeduplicationKeyTest {
                 .createTimeEpochSeconds(1_700_000_000L);
     }
 
+    private static WechatInboundMessage.CompositePayload compositeWithValue(Object value) {
+        return new WechatInboundMessage.CompositePayload(
+                "TypedValue", List.of(Map.of("Value", value)));
+    }
+
+    private static String compositeSha256(WechatInboundMessage.CompositePayload composite) {
+        return EventDeduplicationKey.compositeFingerprint(composite)
+                .orElseThrow()
+                .contentSha256();
+    }
+
     private static byte[] encoded(String value) {
         if (value == null) {
             return new byte[] {(byte) 0xff, (byte) 0xff, (byte) 0xff, (byte) 0xff};
@@ -334,6 +431,7 @@ class EventDeduplicationKeyTest {
             }
         } else {
             output.write('V');
+            output.writeBytes(encoded("string"));
             output.writeBytes(encoded(String.valueOf(value)));
         }
         return output.toByteArray();

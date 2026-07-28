@@ -17,6 +17,12 @@ public final class EventDeduplicationKey {
     private static final byte[] NULL_FIELD = {
         (byte) 0xff, (byte) 0xff, (byte) 0xff, (byte) 0xff
     };
+    private static final BigDecimal MIN_LATITUDE = new BigDecimal("-90");
+    private static final BigDecimal MAX_LATITUDE = new BigDecimal("90");
+    private static final BigDecimal MIN_LONGITUDE = new BigDecimal("-180");
+    private static final BigDecimal MAX_LONGITUDE = new BigDecimal("180");
+    private static final BigDecimal MAX_LOCATION_PRECISION =
+            new BigDecimal("999999.999999");
 
     private EventDeduplicationKey() {}
 
@@ -43,9 +49,9 @@ public final class EventDeduplicationKey {
         writeField(output, message.ticket());
 
         ByteArrayOutputStream coordinates = new ByteArrayOutputStream();
-        writeField(coordinates, canonicalDecimal(message.latitude()));
-        writeField(coordinates, canonicalDecimal(message.longitude()));
-        writeField(coordinates, canonicalDecimal(message.locationPrecision()));
+        writeField(coordinates, canonicalLatitude(message.latitude()));
+        writeField(coordinates, canonicalLongitude(message.longitude()));
+        writeField(coordinates, canonicalPrecision(message.locationPrecision()));
         writeField(output, coordinates.toByteArray());
 
         Optional<CompositeFingerprint> compositeFingerprint =
@@ -73,14 +79,41 @@ public final class EventDeduplicationKey {
                 composite.type(), composite.items().size(), hash));
     }
 
-    static String canonicalDecimal(BigDecimal value) {
+    static String canonicalLatitude(BigDecimal value) {
+        return canonicalCoordinate(
+                "latitude", value, MIN_LATITUDE, MAX_LATITUDE, 7);
+    }
+
+    static String canonicalLongitude(BigDecimal value) {
+        return canonicalCoordinate(
+                "longitude", value, MIN_LONGITUDE, MAX_LONGITUDE, 7);
+    }
+
+    static String canonicalPrecision(BigDecimal value) {
+        return canonicalCoordinate(
+                "precision", value, BigDecimal.ZERO, MAX_LOCATION_PRECISION, 6);
+    }
+
+    private static String canonicalCoordinate(
+            String name,
+            BigDecimal value,
+            BigDecimal minimum,
+            BigDecimal maximum,
+            int maximumScale) {
         if (value == null) {
             return null;
+        }
+        if (value.compareTo(minimum) < 0 || value.compareTo(maximum) > 0) {
+            throw new IllegalArgumentException(name + " is outside the supported range");
         }
         if (value.signum() == 0) {
             return "0";
         }
-        return value.stripTrailingZeros().toPlainString();
+        BigDecimal normalized = value.stripTrailingZeros();
+        if (Math.max(normalized.scale(), 0) > maximumScale) {
+            throw new IllegalArgumentException(name + " scale exceeds " + maximumScale);
+        }
+        return normalized.toPlainString();
     }
 
     static byte[] canonicalBytes(Object value) {
@@ -119,12 +152,51 @@ public final class EventDeduplicationKey {
             return;
         }
         output.write('V');
+        writeField(output, scalarType(value));
         writeField(output, canonicalScalar(value));
+    }
+
+    private static String scalarType(Object value) {
+        if (value instanceof String) {
+            return "string";
+        }
+        if (value instanceof Boolean) {
+            return "boolean";
+        }
+        if (value instanceof Byte) {
+            return "int8";
+        }
+        if (value instanceof Short) {
+            return "int16";
+        }
+        if (value instanceof Integer) {
+            return "int32";
+        }
+        if (value instanceof Long) {
+            return "int64";
+        }
+        if (value instanceof java.math.BigInteger) {
+            return "bigint";
+        }
+        if (value instanceof Float) {
+            return "float32";
+        }
+        if (value instanceof Double) {
+            return "float64";
+        }
+        if (value instanceof BigDecimal) {
+            return "decimal";
+        }
+        throw new IllegalArgumentException(
+                "Unsupported canonical scalar type: " + value.getClass().getName());
     }
 
     private static String canonicalScalar(Object value) {
         if (value instanceof BigDecimal decimal) {
-            return canonicalDecimal(decimal);
+            if (decimal.signum() == 0) {
+                return "0";
+            }
+            return decimal.stripTrailingZeros().toString();
         }
         return String.valueOf(value);
     }

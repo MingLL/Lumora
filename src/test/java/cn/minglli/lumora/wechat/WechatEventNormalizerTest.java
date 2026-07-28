@@ -215,6 +215,60 @@ class WechatEventNormalizerTest {
         assertThat(event.normalizedMessageSha256()).matches("[0-9a-f]{64}");
     }
 
+    @Test
+    void stringRenderingRedactsEverySensitiveNormalizedField() {
+        String openId = "sensitive-openid";
+        String eventKey = "qrscene_sensitive-scene";
+        String ticket = "sensitive-ticket";
+        String menuKey = "sensitive-menu-key";
+        String menuUrl = "https://sensitive.example/menu-url";
+        String scanResult = "sensitive-composite-scan-result";
+        var scan = normalizer.normalize(eventMessage()
+                .openId(openId)
+                .event("SCAN")
+                .eventKey(eventKey)
+                .ticket(ticket)
+                .build());
+        var click = normalizer.normalize(
+                eventMessage().event("CLICK").eventKey(menuKey).build());
+        var view = normalizer.normalize(
+                eventMessage().event("VIEW").eventKey(menuUrl).build());
+        var location = normalizer.normalize(eventMessage()
+                .event("LOCATION")
+                .latitude(new BigDecimal("31.1234567"))
+                .longitude(new BigDecimal("121.7654321"))
+                .locationPrecision(new BigDecimal("9.123456"))
+                .build());
+        var composite = normalizer.normalize(eventMessage()
+                .event("scancode_push")
+                .composite(new WechatInboundMessage.CompositePayload(
+                        "ScanCodeInfo", List.of(Map.of("ScanResult", scanResult))))
+                .build());
+
+        String rendering = List.of(scan, click, view, location, composite).stream()
+                .map(result -> result + " " + result.event().orElseThrow())
+                .reduce("", (left, right) -> left + right);
+
+        assertThat(rendering)
+                .doesNotContain(
+                        openId,
+                        eventKey,
+                        "sensitive-scene",
+                        ticket,
+                        menuKey,
+                        menuUrl,
+                        "31.1234567",
+                        "121.7654321",
+                        "9.123456",
+                        scanResult)
+                .contains(
+                        "SCAN",
+                        "MENU_CLICK",
+                        "MENU_VIEW",
+                        "LOCATION",
+                        "MENU_OTHER");
+    }
+
     private static WechatInboundMessage.Builder eventMessage() {
         return WechatInboundMessage.builder()
                 .appId("wx-app")

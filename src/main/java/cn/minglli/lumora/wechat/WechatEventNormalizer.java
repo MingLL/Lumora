@@ -103,6 +103,12 @@ public final class WechatEventNormalizer {
         private static NormalizationResult ignored() {
             return new NormalizationResult(Outcome.IGNORED, Optional.empty());
         }
+
+        @Override
+        public String toString() {
+            EventType eventType = event.map(NormalizedEvent::eventType).orElse(null);
+            return "NormalizationResult[outcome=" + outcome + ", eventType=" + eventType + "]";
+        }
     }
 
     public record NormalizedEvent(
@@ -127,5 +133,12 @@ public final class WechatEventNormalizer {
             Integer compositeItemCount,
             String compositeSha256,
             String safeSummary,
-            String normalizedMessageSha256) {}
+            String normalizedMessageSha256) {
+
+        @Override
+        public String toString() {
+            return "NormalizedEvent[eventType=" + eventType
+                    + ", safeSummary=" + safeSummary + "]";
+        }
+    }
 }

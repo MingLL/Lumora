@@ -34,12 +34,12 @@ public final class SafeMessageSummary {
         normalized.put("EventKey", message.eventKey());
         normalized.put("Ticket", message.ticket());
         normalized.put(
-                "Latitude", EventDeduplicationKey.canonicalDecimal(message.latitude()));
+                "Latitude", EventDeduplicationKey.canonicalLatitude(message.latitude()));
         normalized.put(
-                "Longitude", EventDeduplicationKey.canonicalDecimal(message.longitude()));
+                "Longitude", EventDeduplicationKey.canonicalLongitude(message.longitude()));
         normalized.put(
                 "Precision",
-                EventDeduplicationKey.canonicalDecimal(message.locationPrecision()));
+                EventDeduplicationKey.canonicalPrecision(message.locationPrecision()));
         if (message.composite() == null) {
             normalized.put("Composite", null);
         } else {
