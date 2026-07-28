@@ -1,7 +1,16 @@
 # 部署说明
 
-这里只讲**前端静态站**（`frontend/`）的部署。后端服务（`backend/`）自带
-Dockerfile，是独立的容器，还没接进这套 k3s 清单。
+两个子项目都部署在同一套 k3s 上，共用 `lumora` 命名空间和 Traefik 入口，
+但发布互不影响：
+
+| | 前端静态站 | 后端服务 |
+|---|---|---|
+| 发布命令 | `./deploy/deploy.sh` | `./deploy/deploy-backend.sh` |
+| 清单 | `deploy/k8s/lumora.yaml` | `deploy/k8s/lumora-backend*.yaml` |
+| 公网路径 | `/`（兜底） | `/wechat/callback/`（更长，优先命中） |
+| 详见 | 下文 | [后端发布](#后端发布) |
+
+下文先讲**前端静态站**（`frontend/`）。
 
 ## 架构
 
@@ -240,3 +249,92 @@ ssh dev1 'k3s kubectl delete ns lumora'
 
 - 集群里原有的 `k8s-demo` 命名空间已删除（本次部署前确认不再需要），
   清单备份在 dev1 的 `/root/k8s-demo-backup-20260726.yaml`，需要时可 `kubectl apply` 恢复。
+
+## 后端发布
+
+```bash
+./deploy/deploy-backend.sh              # 用当前 git commit 当镜像 tag
+./deploy/deploy-backend.sh v20260729    # 指定 tag
+./deploy/deploy-backend.sh --skip-build # 复用已构建的同名镜像
+```
+
+同一个镜像跑四种角色，靠环境变量区分，互不抢工作：
+
+| 角色 | 副本 | 后台任务 | 内部发送 | 公网 |
+|---|---|---|---|---|
+| `migrate` (Job) | 一次性 | — | — | 无 |
+| `web` | 2 | 全关 | 关 | `/wechat/callback/` |
+| `worker` | 1 | 全开 | 关 | 无 |
+| `ops` | 1 | 全关 | 开 | 无，仅 ClusterIP |
+
+**为什么 worker 是 `strategy: Recreate`**：先停旧的再起新的，保证任一时刻最多一个
+调度实例。数据库租约仍是最终保障，但发布过程不该依赖它兜底。worker 的就绪探针查
+`/tmp/lumora-worker-ready`，这个文件由 `WorkerReadinessVerifier` 在确认「模式对、
+数据库通、三个定时任务都注册了」之后才写 —— 进程起来了不等于在干活。
+
+### 前置准备
+
+服务器上要有凭据文件，脚本只读不写、也不打印内容：
+
+```bash
+ssh dev1 'sudo mkdir -p /opt/lumora/backend'
+scp backend/.env.example dev1:/tmp/env && ssh dev1 \
+  'sudo mv /tmp/env /opt/lumora/backend/.env && sudo chmod 600 /opt/lumora/backend/.env'
+# 然后在服务器上填写实际值，两台机器都要
+```
+
+校验：`ssh dev1 'cd /opt/lumora/backend && bash -s' < backend/deploy/check-env.sh`
+
+数据库：如果已有 MySQL，把 `.env` 的 `MYSQL_HOST` 指过去即可。没有的话用
+`deploy/k8s/lumora-mysql.yaml`（把 `__MYSQL_NODE__` 换成节点名再 apply），
+注意它用 hostPath 存在 dev1 的 `/opt/lumora/mysql`，备份和加密要自己安排，
+见 [backend/README.md](../backend/README.md) 的 Operating the Database。
+
+### 镜像怎么上服务器
+
+这两台阿里云机器直连 Docker Hub 不通，也没有私有 registry，所以走
+`docker save` → `scp` → `k3s ctr images import`。构建时固定 `--platform linux/amd64`
+（本地可能是 arm64 Mac）。
+
+### 发布顺序
+
+脚本严格按这个顺序走，任何一步失败都不会动到正在服务的 pod：
+
+1. 预检两台机器可达、`.env` 存在且权限 600
+2. 构建 + `verify-packaging.sh`（非 root 用户、镜像里没有密钥形状的值）
+3. 分发镜像到两个节点
+4. 从服务器 `.env` 刷新 `Secret/lumora-env`
+5. 跑迁移 Job，**等它完成**
+6. `schema-smoke` 确认候选镜像能用迁移后的库
+7. apply 清单，等三个 Deployment rollout
+8. 验证 web 存活，并确认公网访问不到 `/internal/` 和 `/actuator/health/readiness`
+
+回滚：
+
+```bash
+ssh dev1 'sudo k3s kubectl -n lumora rollout undo deployment/lumora-backend-web'
+```
+
+迁移是 expand-only 的（只加可空列/表/兼容索引），所以旧版本能继续跑在迁移后的库上。
+
+### 手动补发日报
+
+`ops` 容器没有公网路由，只能在服务器上调：
+
+```bash
+ssh dev1 "sudo k3s kubectl -n lumora exec deployment/lumora-backend-ops -- \
+  curl -fsS -X POST http://127.0.0.1:8080/internal/reports/2026-07-28/send \
+  -H 'X-Lumora-Admin-Key: <REPORT_ADMIN_KEY>' -H 'X-Request-Id: $(uuidgen)'"
+```
+
+`X-Request-Id` 是幂等键，重复用同一个 ID 会返回上次的结果而不是再发一封。
+可选 JSON body：`{"regenerate": true}` 重新生成快照，`{"force": true}` 允许已成功时再发。
+
+### 改了发布脚本之后
+
+```bash
+bash deploy/tests/deploy_contract_test.sh
+```
+
+用假的 docker/ssh/scp/curl 跑一遍，断言迁移早于 apply、校验早于分发、预检失败时
+不产生任何变更、以及输出里不出现 `.env` 的内容。

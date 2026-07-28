@@ -39,25 +39,25 @@
 - Create: `.gitignore`
 - Create: `.env.example`
 
-- [ ] **Step 1: Write failing configuration binding tests**
+- [x] **Step 1: Write failing configuration binding tests**
 
 Test that missing `WECHAT_APP_ID`, `WECHAT_ORIGINAL_ID`, `WECHAT_TOKEN`, `WECHAT_AES_KEY`, MySQL settings, QQ mail settings, recipients, or admin key yields a named validation error; test recipient parsing and default `Asia/Shanghai`.
 
-- [ ] **Step 2: Run the focused test and confirm it fails**
+- [x] **Step 2: Run the focused test and confirm it fails**
 
 Run: `mvn -q -Dtest=LumoraPropertiesTest test`  
 Expected: FAIL because the application and typed properties do not exist.
 
-- [ ] **Step 3: Add the minimal Spring Boot skeleton**
+- [x] **Step 3: Add the minimal Spring Boot skeleton**
 
 Use Java 17 and dependency management for Web, Validation, Mail, Actuator, MyBatis, Flyway, MySQL, Weixin Java MP, Testcontainers, and test support. Bind secrets from environment placeholders only. Inject a `Clock` so time-dependent code is deterministic.
 
-- [ ] **Step 4: Run bootstrap tests**
+- [x] **Step 4: Run bootstrap tests**
 
 Run: `mvn -q -Dtest=LumoraPropertiesTest test`  
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add pom.xml src .gitignore .env.example
@@ -76,25 +76,25 @@ git commit -m "feat: bootstrap validated Lumora service"
 - Create: `src/test/java/cn/minglli/lumora/support/MySqlContainerTest.java`
 - Create: `src/test/java/cn/minglli/lumora/event/WechatEventRepositoryTest.java`
 
-- [ ] **Step 1: Write failing MySQL integration tests**
+- [x] **Step 1: Write failing MySQL integration tests**
 
 Assert Flyway creates `wechat_event`, `daily_report`, and `report_delivery_attempt`; verify UTC `timestamp(6)`, `unique(app_id,deduplication_key)`, `unique(report_date,version)`, nullable generated `auto_report_id`, and manual request uniqueness.
 
-- [ ] **Step 2: Run and confirm schema tests fail**
+- [x] **Step 2: Run and confirm schema tests fail**
 
 Run: `mvn -q -Dtest=WechatEventRepositoryTest test`  
 Expected: FAIL because migration and repository are missing.
 
-- [ ] **Step 3: Implement V1 and insert semantics**
+- [x] **Step 3: Implement V1 and insert semantics**
 
 Use an insert that returns `INSERTED` or `DUPLICATE` without treating a duplicate key as an application error. Store all instants in UTC. Keep raw XML and message content out of the table.
 
-- [ ] **Step 4: Test persistence and idempotency**
+- [x] **Step 4: Test persistence and idempotency**
 
 Run: `mvn -q -Dtest=WechatEventRepositoryTest test`  
 Expected: PASS, including concurrent duplicate insert producing one row.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/main/resources/db src/main/resources/mapper src/main/java/cn/minglli/lumora/event src/test
@@ -111,29 +111,29 @@ git commit -m "feat: add durable event and report schema"
 - Create: `src/test/java/cn/minglli/lumora/wechat/WechatEventNormalizerTest.java`
 - Create: `src/test/java/cn/minglli/lumora/wechat/EventDeduplicationKeyTest.java`
 
-- [ ] **Step 1: Write table-driven failing mapping tests**
+- [x] **Step 1: Write table-driven failing mapping tests**
 
 Cover `subscribe`, QR subscribe, `unsubscribe`, `SCAN`, `LOCATION`, `CLICK`, `VIEW`, six exact `MENU_OTHER` event names, unsupported event to `UNKNOWN`, and ordinary non-event messages to `IGNORED`.
 
-- [ ] **Step 2: Add failing fingerprint and privacy tests**
+- [x] **Step 2: Add failing fingerprint and privacy tests**
 
 Verify `qrscene_` normalization; length-prefixed null-safe serialization; `msgid:` preference; SHA-256 stability; composite-field fingerprints distinguish payloads without persisting raw scan, photo, or selected-location data; summaries contain only whitelisted metadata.
 
-- [ ] **Step 3: Run and confirm failures**
+- [x] **Step 3: Run and confirm failures**
 
 Run: `mvn -q -Dtest=WechatEventNormalizerTest,EventDeduplicationKeyTest test`  
 Expected: FAIL because normalization classes are missing.
 
-- [ ] **Step 4: Implement the minimal pure domain functions**
+- [x] **Step 4: Implement the minimal pure domain functions**
 
 Keep mapping and fingerprinting free of Spring and database dependencies. Make normalization locale-independent and deterministic.
 
-- [ ] **Step 5: Run focused and property-style edge tests**
+- [x] **Step 5: Run focused and property-style edge tests**
 
 Run: `mvn -q -Dtest=WechatEventNormalizerTest,EventDeduplicationKeyTest test`  
 Expected: PASS.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add src/main/java/cn/minglli/lumora/wechat src/test/java/cn/minglli/lumora/wechat
@@ -151,29 +151,29 @@ git commit -m "feat: normalize and fingerprint WeChat events"
 - Create: `src/test/java/cn/minglli/lumora/wechat/SafeXmlParserTest.java`
 - Create: `src/test/java/cn/minglli/lumora/wechat/WechatCallbackControllerTest.java`
 
-- [ ] **Step 1: Write failing GET callback MVC tests**
+- [x] **Step 1: Write failing GET callback MVC tests**
 
 Cover valid verification, invalid signature, wrong route AppID, unchanged `echostr`, and `text/plain`.
 
-- [ ] **Step 2: Write failing POST callback tests**
+- [x] **Step 2: Write failing POST callback tests**
 
 Cover plaintext and encrypted fixtures, original-ID mismatch, encrypted-envelope AppID mismatch, bad `msg_signature`, corrupt ciphertext, malformed XML, XXE, 256 KiB limit, ignored ordinary messages, duplicate success, and repository failure returning a retryable non-2xx response.
 
-- [ ] **Step 3: Run and confirm protocol failures**
+- [x] **Step 3: Run and confirm protocol failures**
 
 Run: `mvn -q -Dtest=SafeXmlParserTest,WechatCallbackControllerTest test`  
 Expected: FAIL because callback components are missing.
 
-- [ ] **Step 4: Implement signature/decryption adapter and safe parsing**
+- [x] **Step 4: Implement signature/decryption adapter and safe parsing**
 
 Delegate WeChat cryptography to Weixin Java MP. Enforce route identity before parsing, original ID after parsing, and literal `success` only after a durable insert or duplicate result.
 
-- [ ] **Step 5: Run callback tests**
+- [x] **Step 5: Run callback tests**
 
 Run: `mvn -q -Dtest=SafeXmlParserTest,WechatCallbackControllerTest test`  
 Expected: PASS.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add src/main/java/cn/minglli/lumora/wechat src/test/java/cn/minglli/lumora/wechat
@@ -192,29 +192,29 @@ git commit -m "feat: accept secure WeChat event callbacks"
 - Create: `src/test/java/cn/minglli/lumora/report/DailyReportServiceTest.java`
 - Create: `src/test/java/cn/minglli/lumora/report/ReportTemplateRendererTest.java`
 
-- [ ] **Step 1: Write failing timezone and aggregation tests**
+- [x] **Step 1: Write failing timezone and aggregation tests**
 
 Use a fixed clock to verify Shanghai yesterday maps to the correct UTC half-open range. Assert totals and unique users include `UNKNOWN`; subscribe/unsubscribe/net event counts; per-type details; QR/menu counts plus unique users; missing-label behavior; anomalous timestamps; and empty-day output.
 
-- [ ] **Step 2: Write failing immutable snapshot race tests**
+- [x] **Step 2: Write failing immutable snapshot race tests**
 
 Two concurrent version-1 creators must converge on one stored JSON snapshot. Regeneration creates version N+1 without changing prior versions.
 
-- [ ] **Step 3: Run report tests and confirm failure**
+- [x] **Step 3: Run report tests and confirm failure**
 
 Run: `mvn -q -Dtest=DailyReportServiceTest,ReportTemplateRendererTest test`  
 Expected: FAIL because aggregation and templates are missing.
 
-- [ ] **Step 4: Implement SQL aggregation and renderers**
+- [x] **Step 4: Implement SQL aggregation and renderers**
 
 Return both HTML and plain text. Do not include coordinates or full OpenIDs. Include stable report date, version, and generation time.
 
-- [ ] **Step 5: Run focused report tests**
+- [x] **Step 5: Run focused report tests**
 
 Run: `mvn -q -Dtest=DailyReportServiceTest,ReportTemplateRendererTest test`  
 Expected: PASS.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add src/main/java/cn/minglli/lumora/report src/main/resources/mapper src/test/java/cn/minglli/lumora/report
@@ -233,29 +233,29 @@ git commit -m "feat: aggregate immutable daily reports"
 - Create: `src/test/java/cn/minglli/lumora/report/ReportDeliveryServiceTest.java`
 - Create: `src/test/java/cn/minglli/lumora/report/DailyReportSchedulerTest.java`
 
-- [ ] **Step 1: Write failing lease and uniqueness tests**
+- [x] **Step 1: Write failing lease and uniqueness tests**
 
 Cover concurrent AUTO get-or-create, one winning claimant, stale `SENDING` recovery after 10 minutes, manual request idempotency, active-delivery 409 semantics, and forced delivery audit rows.
 
-- [ ] **Step 2: Write failing SMTP state-machine tests**
+- [x] **Step 2: Write failing SMTP state-machine tests**
 
 Cover success; transient failure with 5/30-second injected backoff; permanent auth failure; three total attempts; sanitized 500-character errors; stable `Message-ID`; and the SMTP-accepted-before-`SENT` crash window documenting at-least-once behavior.
 
-- [ ] **Step 3: Run and confirm failures**
+- [x] **Step 3: Run and confirm failures**
 
 Run: `mvn -q -Dtest=ReportDeliveryServiceTest,DailyReportSchedulerTest test`  
 Expected: FAIL because delivery services are missing.
 
-- [ ] **Step 4: Implement the state machine and report schedulers**
+- [x] **Step 4: Implement the state machine and report schedulers**
 
 Schedule daily reporting at `0 0 7 * * *` in `Asia/Shanghai`. Register daily and recovery jobs only when their enable flags are true. Retention scheduling is introduced with `EventRetentionService` in Task 7. Configure QQ SMTP SSL 465 and 10-second connection/read/write timeouts.
 
-- [ ] **Step 5: Run delivery tests**
+- [x] **Step 5: Run delivery tests**
 
 Run: `mvn -q -Dtest=ReportDeliveryServiceTest,DailyReportSchedulerTest test`  
 Expected: PASS without sending real email.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add src/main/java/cn/minglli/lumora/mail src/main/java/cn/minglli/lumora/report src/main/resources/mapper src/test
@@ -272,29 +272,29 @@ git commit -m "feat: deliver lease-safe QQ email reports"
 - Create: `src/test/java/cn/minglli/lumora/report/ManualReportControllerTest.java`
 - Create: `src/test/java/cn/minglli/lumora/event/EventRetentionServiceTest.java`
 
-- [ ] **Step 1: Write failing admin endpoint tests**
+- [x] **Step 1: Write failing admin endpoint tests**
 
 Require constant-time `X-Lumora-Admin-Key` checking and `X-Request-Id`; reject missing/invalid credentials, today/future dates, duplicate active sends, and unrequested resends; test `force` and `regenerate`.
 
-- [ ] **Step 2: Write failing retention tests**
+- [x] **Step 2: Write failing retention tests**
 
 At 30 days, coordinates become null. At 400 days, events, report snapshots, and delivery audit records are removed. Verify boundaries and logs contain counts only.
 
-- [ ] **Step 3: Run and confirm failures**
+- [x] **Step 3: Run and confirm failures**
 
 Run: `mvn -q -Dtest=ManualReportControllerTest,EventRetentionServiceTest test`  
 Expected: FAIL.
 
-- [ ] **Step 4: Implement protected operations**
+- [x] **Step 4: Implement protected operations**
 
 Do not expose `/internal/**`, readiness, or sensitive Actuator endpoints through public deployment ingress. Only liveness is public. Disable internal send behavior entirely in candidate mode. Add the retention scheduler at `0 30 3 * * *` in `Asia/Shanghai`, conditional on `RETENTION_ENABLED`.
 
-- [ ] **Step 5: Run focused tests**
+- [x] **Step 5: Run focused tests**
 
 Run: `mvn -q -Dtest=ManualReportControllerTest,EventRetentionServiceTest test`  
 Expected: PASS.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add src/main/java/cn/minglli/lumora/operations src/main/java/cn/minglli/lumora/report src/main/java/cn/minglli/lumora/event src/test
@@ -312,15 +312,15 @@ git commit -m "feat: protect report operations and enforce retention"
 - Create: `README.md`
 - Modify: `.env.example`
 
-- [ ] **Step 1: Write container and configuration smoke assertions**
+- [x] **Step 1: Write container and configuration smoke assertions**
 
 Add a Maven context test for production startup with mail replaced by a no-op profile. Add `docker compose config` and shell syntax checks to the verification script.
 
-- [ ] **Step 2: Implement a non-root multi-stage image and Compose stack**
+- [x] **Step 2: Implement a non-root multi-stage image and Compose stack**
 
 Pin MySQL 8.4, persist its data, add application/MySQL health checks, avoid exposing MySQL publicly, and keep secrets out of build arguments and image layers. Flyway migration runs as an explicit one-shot service.
 
-- [ ] **Step 3: Validate JVM and Compose packaging**
+- [x] **Step 3: Validate JVM and Compose packaging**
 
 Run: `mvn -q verify`  
 Expected: PASS.
@@ -331,17 +331,17 @@ Expected: exit 0 without printing secret values.
 Run: `bash -n deploy/check-env.sh`  
 Expected: exit 0.
 
-- [ ] **Step 4: Build the image**
+- [x] **Step 4: Build the image**
 
 Run: `docker build -t lumora:test .`  
 Expected: build succeeds and image user is non-root.
 
-- [ ] **Step 5: Inspect the built image**
+- [x] **Step 5: Inspect the built image**
 
 Run: `bash deploy/verify-packaging.sh lumora:test`  
 Expected: exit 0; image runs as non-root and contains no secret-shaped build metadata.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add Dockerfile .dockerignore compose.yaml deploy README.md .env.example src/test
@@ -350,27 +350,34 @@ git commit -m "build: package Lumora production stack"
 
 ## Task 9: Inspect dev2 and Add Safe Blue/Green Deployment Automation
 
-**Files:**
-- Create: `deploy/dev2/preflight.sh`
-- Create: `deploy/dev2/deploy.sh`
-- Create: `deploy/dev2/activate.sh`
-- Create: `deploy/dev2/rollback.sh`
-- Create: `deploy/dev2/verify.sh`
-- Modify: `README.md`
+> **实现偏离**（2026-07-29）：本任务原计划在 dev2 上跑一套独立的 Docker Compose +
+> nginx 蓝绿。实际 dev1/dev2 跑的是 k3s + Traefik，前端已经在用，所以改为复用现有集群。
+> 蓝绿切换由 k8s 的滚动更新承担（web 用 `maxUnavailable: 0`，worker 用 `Recreate`
+> 保证任一时刻最多一个调度实例），不再手写 activate/rollback 脚本 —— 回滚就是
+> `kubectl rollout undo`。计划里逐条的顺序与安全性要求原样保留，由契约测试锁住。
+>
+> **实际产出：**
+> - `deploy/k8s/lumora-backend.yaml` —— web/worker/ops 三个 Deployment + Service + Ingress
+> - `deploy/k8s/lumora-backend-migrate.yaml` —— 一次性迁移 Job，按版本命名
+> - `deploy/k8s/lumora-mysql.yaml` —— 可选的集群内 MySQL
+> - `deploy/deploy-backend.sh` —— 构建 → ctr import → Secret → 迁移 → smoke → apply → 验证
+> - `deploy/tests/deploy_contract_test.sh` —— 14 条顺序/回滚/不泄密断言
+>
+> `compose.yaml` 仍然保留，用于本地跑一套生产形态的栈。
 
 - [ ] **Step 1: Perform read-only dev2 discovery**
 
 Run through SSH: inspect OS, Docker/Compose, listening ports, disk, current proxy, existing Lumora paths, and service ownership. Do not create files, restart services, or print environment values.
 
-- [ ] **Step 2: Write shell contract tests**
+- [x] **Step 2: Write shell contract tests**
 
 Create `deploy/tests/deploy_contract_test.sh` with fake `docker`, `curl`, SSH, and proxy commands on `PATH`. Assert candidate web starts with all background flags false; signed GET and POST acceptance occur before worker cutover; proxy switches only after health; rollback retains current service; scripts never echo `.env`.
 
-- [ ] **Step 3: Implement versioned blue/green scripts**
+- [x] **Step 3: Implement versioned blue/green scripts**
 
 Require an explicit immutable image tag, explicit deploy directory, and validated server `.env`. Run expand-only migration once, start candidate, verify locally, switch upstream atomically, activate background work, and retain the previous version for rollback.
 
-- [ ] **Step 4: Run local deployment checks**
+- [x] **Step 4: Run local deployment checks**
 
 Run: `bash -n deploy/dev2/*.sh`  
 Expected: all scripts parse.
@@ -401,12 +408,12 @@ git commit -m "ops: add safe dev2 blue-green deployment"
 **Files:**
 - Modify as required by verification findings only.
 
-- [ ] **Step 1: Run the complete automated suite**
+- [x] **Step 1: Run the complete automated suite**
 
 Run: `mvn -q clean verify`  
 Expected: PASS with no skipped required tests.
 
-- [ ] **Step 2: Run packaging checks**
+- [x] **Step 2: Run packaging checks**
 
 Run: `docker compose --env-file .env.example config --quiet`  
 Expected: exit 0.
@@ -414,12 +421,12 @@ Expected: exit 0.
 Run: `docker build -t lumora:verify .`  
 Expected: exit 0.
 
-- [ ] **Step 3: Scan tracked content for credentials**
+- [x] **Step 3: Scan tracked content for credentials**
 
 Run: `git grep -n -E '(sk-[A-Za-z0-9]{20,}|MAIL_AUTH_CODE=.+|MYSQL_PASSWORD=.+|WECHAT_AES_KEY=.+)' -- ':!docs/superpowers/*'`  
 Expected: no real credential values.
 
-- [ ] **Step 4: Review the final diff and status**
+- [x] **Step 4: Review the final diff and status**
 
 Run: `git status --short` and `git log --oneline --decorate -12`  
 Expected: only intentional changes; task commits are present.

@@ -6,7 +6,7 @@
 ```text
 frontend/     Astro 静态站（内容、组件、字体子集脚本）
 backend/      Spring Boot 服务（微信回调、日报、MySQL）
-deploy/       前端的 k3s 部署清单与发布脚本
+deploy/       前后端的 k3s 部署清单、发布脚本与契约测试
 scripts/      服务器上跑的运维脚本（nginx 访问日报）
 docs/         设计与方案文档
 ```
@@ -17,7 +17,7 @@ docs/         设计与方案文档
 |---|---|---|
 | 技术栈 | Astro 7 + TypeScript + Tailwind 4 | Java 17 + Spring Boot 3.3 + MyBatis + Flyway |
 | 产物 | 纯静态 `dist/` | 可执行 jar / Docker 镜像 |
-| 部署 | 本地构建 → rsync 到 dev1/dev2 → k3s 里的 nginx | Dockerfile（尚未接入 k3s） |
+| 部署 | 本地构建 → rsync 到 dev1/dev2 → k3s 里的 nginx | 本地构建镜像 → ctr import → k3s |
 | 说明 | [frontend/README.md](frontend/README.md) | [backend/README.md](backend/README.md) |
 
 两者目前**没有代码耦合**：站点是纯静态的，不调用后端接口。后端服务于公众号侧的
@@ -45,11 +45,16 @@ mvn -DskipTests package
 ## 发布
 
 ```bash
-./deploy/deploy.sh   # 前端：构建 + 同步到两台服务器 + 应用 k8s 清单
+./deploy/deploy.sh           # 前端：构建 + 同步到两台服务器 + 应用 k8s 清单
+./deploy/deploy-backend.sh   # 后端：构建镜像 + 导入两个节点 + 迁移 + 滚动更新
 ```
 
-在仓库根目录执行，脚本会自己进 `frontend/` 构建。架构、接域名 / HTTPS、
-每日访问日报的安装与排查，都在 [deploy/README.md](deploy/README.md)。
+都在仓库根目录执行，脚本自己会进各自的子目录。两者共用同一套 k3s 和 `lumora`
+命名空间，但发布互不影响 —— Traefik 按路径长度定优先级，`/wechat/callback/`
+先于前端的 `/` 命中。
+
+架构、接域名 / HTTPS、后端发布顺序与回滚、每日访问日报的安装与排查，
+都在 [deploy/README.md](deploy/README.md)。
 
 ## 两份「日报」不是一回事
 
