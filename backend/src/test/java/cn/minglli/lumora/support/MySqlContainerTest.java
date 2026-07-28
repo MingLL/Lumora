@@ -6,10 +6,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.testcontainers.containers.MySQLContainer;
-import org.testcontainers.junit.jupiter.Container;
-import org.testcontainers.junit.jupiter.Testcontainers;
 
-@Testcontainers
 @SpringBootTest(properties = {
         "lumora.wechat-app-id=wx-app-id",
         "lumora.wechat-original-id=gh_original",
@@ -28,12 +25,25 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 })
 public abstract class MySqlContainerTest {
 
-    @Container
+    /**
+     * Singleton container, started once for the whole JVM and never stopped here.
+     *
+     * <p>Deliberately not {@code @Testcontainers}/{@code @Container}: that pair stops
+     * the container in each subclass's {@code afterAll}, while Spring's context cache
+     * survives across test classes. The second integration class to run would then
+     * reuse a cached datasource pointing at a container that no longer exists, and
+     * fail with "Connection refused" 30 seconds at a time. Ryuk removes the container
+     * when the JVM exits.
+     */
     protected static final MySQLContainer<?> MYSQL = new MySQLContainer<>("mysql:8.4")
             .withDatabaseName("lumora")
             .withUsername("lumora")
             .withPassword("lumora")
             .withCommand("--default-time-zone=+00:00");
+
+    static {
+        MYSQL.start();
+    }
 
     @DynamicPropertySource
     static void mysqlProperties(DynamicPropertyRegistry registry) {
