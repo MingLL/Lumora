@@ -171,6 +171,13 @@
           AND version = #{version}
     </select>
 
+    <select id="findDailyReportById" resultMap="dailyReportRecord">
+        SELECT id, report_date, version, window_start, window_end,
+               data_cutoff_at, snapshot_json, created_at
+        FROM daily_report
+        WHERE id = #{id}
+    </select>
+
     <select id="findLatestVersion" resultMap="dailyReportRecord">
         SELECT id, report_date, version, window_start, window_end,
                data_cutoff_at, snapshot_json, created_at

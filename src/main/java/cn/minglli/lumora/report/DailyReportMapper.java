@@ -39,6 +39,8 @@ public interface DailyReportMapper {
 
     DailyReportRecord findByDateAndVersion(@Param("reportDate") LocalDate reportDate, @Param("version") int version);
 
+    DailyReportRecord findDailyReportById(@Param("id") Long id);
+
     DailyReportRecord findLatestVersion(@Param("reportDate") LocalDate reportDate);
 
     Integer findMaxVersion(@Param("reportDate") LocalDate reportDate);
