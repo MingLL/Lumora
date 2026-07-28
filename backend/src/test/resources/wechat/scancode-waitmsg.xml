@@ -1,0 +1,9 @@
+<xml>
+  <ToUserName><![CDATA[gh_test_original]]></ToUserName>
+  <FromUserName><![CDATA[openid-private]]></FromUserName>
+  <CreateTime>1785240000</CreateTime>
+  <MsgType><![CDATA[event]]></MsgType>
+  <Event><![CDATA[scancode_waitmsg]]></Event>
+  <EventKey><![CDATA[MENU_SCAN_WAIT]]></EventKey>
+  <ScanCodeInfo><ScanType>qrcode</ScanType><ScanResult>private-result</ScanResult></ScanCodeInfo>
+</xml>

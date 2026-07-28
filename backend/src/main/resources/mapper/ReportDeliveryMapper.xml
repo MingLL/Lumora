@@ -1,0 +1,125 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="cn.minglli.lumora.report.ReportDeliveryMapper">
+
+    <resultMap id="deliveryRecord" type="cn.minglli.lumora.report.ReportDeliveryRecord">
+        <constructor>
+            <idArg column="id" javaType="java.lang.Long"/>
+            <arg column="delivery_id" javaType="java.lang.String"/>
+            <arg column="report_id" javaType="java.lang.Long"/>
+            <arg column="trigger_type" javaType="cn.minglli.lumora.report.DeliveryTriggerType"/>
+            <arg column="request_id" javaType="java.lang.String"/>
+            <arg column="status" javaType="cn.minglli.lumora.report.DeliveryStatus"/>
+            <arg column="recipient_masked" javaType="java.lang.String"/>
+            <arg column="recipient_sha256" javaType="java.lang.String"/>
+            <arg column="attempt_count" javaType="int"/>
+            <arg column="claimed_at" javaType="java.time.Instant"/>
+            <arg column="lease_until" javaType="java.time.Instant"/>
+            <arg column="completed_at" javaType="java.time.Instant"/>
+            <arg column="last_error_class" javaType="java.lang.String"/>
+            <arg column="last_error_summary" javaType="java.lang.String"/>
+            <arg column="created_at" javaType="java.time.Instant"/>
+            <arg column="updated_at" javaType="java.time.Instant"/>
+        </constructor>
+    </resultMap>
+
+    <sql id="deliveryColumns">
+        id, delivery_id, report_id, trigger_type, request_id, status,
+        recipient_masked, recipient_sha256, attempt_count, claimed_at, lease_until,
+        completed_at, last_error_class, last_error_summary, created_at, updated_at
+    </sql>
+
+    <insert id="upsertAuto">
+        INSERT INTO report_delivery_attempt (
+            delivery_id, report_id, trigger_type, status,
+            recipient_masked, recipient_sha256
+        ) VALUES (
+            #{deliveryId}, #{reportId}, 'AUTO', 'PENDING', '', ''
+        )
+        ON DUPLICATE KEY UPDATE id = id
+    </insert>
+
+    <insert id="insertManual">
+        INSERT INTO report_delivery_attempt (
+            delivery_id, report_id, request_id, trigger_type, status,
+            recipient_masked, recipient_sha256
+        ) VALUES (
+            #{deliveryId}, #{reportId}, #{requestId}, 'MANUAL', 'PENDING',
+            #{recipientMasked}, #{recipientSha256}
+        )
+    </insert>
+
+    <select id="findAutoByReportId" resultMap="deliveryRecord">
+        SELECT <include refid="deliveryColumns"/>
+        FROM report_delivery_attempt
+        WHERE trigger_type = 'AUTO' AND report_id = #{reportId}
+        LIMIT 1
+    </select>
+
+    <select id="findByDeliveryId" resultMap="deliveryRecord">
+        SELECT <include refid="deliveryColumns"/>
+        FROM report_delivery_attempt
+        WHERE delivery_id = #{deliveryId}
+    </select>
+
+    <select id="findByReportIdAndRequestId" resultMap="deliveryRecord">
+        SELECT <include refid="deliveryColumns"/>
+        FROM report_delivery_attempt
+        WHERE report_id = #{reportId} AND request_id = #{requestId}
+    </select>
+
+    <select id="findActiveByReportId" resultMap="deliveryRecord">
+        SELECT <include refid="deliveryColumns"/>
+        FROM report_delivery_attempt
+        WHERE report_id = #{reportId} AND status = 'SENDING'
+    </select>
+
+    <select id="findSentByReportId" resultMap="deliveryRecord">
+        SELECT <include refid="deliveryColumns"/>
+        FROM report_delivery_attempt
+        WHERE report_id = #{reportId} AND status = 'SENT'
+    </select>
+
+    <update id="claim">
+        UPDATE report_delivery_attempt
+        SET status = 'SENDING',
+            claimed_at = #{now},
+            lease_until = #{leaseUntil},
+            attempt_count = attempt_count + 1
+        WHERE id = #{id}
+          AND (status = 'PENDING'
+               OR (status = 'SENDING' AND lease_until &lt; #{now}))
+    </update>
+
+    <update id="markSent">
+        UPDATE report_delivery_attempt
+        SET status = 'SENT',
+            completed_at = #{now}
+        WHERE id = #{id} AND status = 'SENDING'
+    </update>
+
+    <update id="markFailed">
+        UPDATE report_delivery_attempt
+        SET status = 'FAILED',
+            completed_at = #{now},
+            last_error_class = #{errorClass},
+            last_error_summary = #{errorSummary}
+        WHERE id = #{id} AND status = 'SENDING'
+    </update>
+
+    <update id="markPendingRetry">
+        UPDATE report_delivery_attempt
+        SET status = 'PENDING',
+            last_error_class = #{errorClass},
+            last_error_summary = #{errorSummary}
+        WHERE id = #{id} AND status = 'SENDING'
+    </update>
+
+    <select id="findRecoverable" resultMap="deliveryRecord">
+        SELECT <include refid="deliveryColumns"/>
+        FROM report_delivery_attempt
+        WHERE status = 'SENDING' AND lease_until &lt; #{now}
+    </select>
+</mapper>
