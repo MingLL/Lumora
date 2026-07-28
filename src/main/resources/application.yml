@@ -1,0 +1,55 @@
+spring:
+  application:
+    name: lumora
+  datasource:
+    url: jdbc:mysql://${MYSQL_HOST}:${MYSQL_PORT:3306}/${MYSQL_DATABASE}?connectionTimeZone=UTC&forceConnectionTimeZoneToSession=true
+    username: ${MYSQL_USERNAME}
+    password: ${MYSQL_PASSWORD}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+  flyway:
+    enabled: false
+  mail:
+    host: smtp.qq.com
+    port: 465
+    username: ${MAIL_USERNAME}
+    password: ${MAIL_AUTH_CODE}
+    default-encoding: UTF-8
+    properties:
+      mail:
+        smtp:
+          auth: true
+          ssl:
+            enable: true
+          connectiontimeout: 10000
+          timeout: 10000
+          writetimeout: 10000
+
+mybatis:
+  mapper-locations: classpath*:mapper/**/*.xml
+
+management:
+  endpoint:
+    health:
+      probes:
+        enabled: true
+
+lumora:
+  wechat-app-id: ${WECHAT_APP_ID}
+  wechat-original-id: ${WECHAT_ORIGINAL_ID}
+  wechat-token: ${WECHAT_TOKEN}
+  wechat-aes-key: ${WECHAT_AES_KEY}
+  mysql-host: ${MYSQL_HOST}
+  mysql-port: ${MYSQL_PORT:3306}
+  mysql-database: ${MYSQL_DATABASE}
+  mysql-username: ${MYSQL_USERNAME}
+  mysql-password: ${MYSQL_PASSWORD}
+  mail-username: ${MAIL_USERNAME}
+  mail-auth-code: ${MAIL_AUTH_CODE}
+  mail-from-name: ${MAIL_FROM_NAME:Lumora}
+  report-recipients: ${REPORT_RECIPIENTS}
+  report-admin-key: ${REPORT_ADMIN_KEY}
+  zone: ${LUMORA_ZONE:Asia/Shanghai}
+  scheduling-enabled: ${SCHEDULING_ENABLED:true}
+  report-recovery-enabled: ${REPORT_RECOVERY_ENABLED:true}
+  retention-enabled: ${RETENTION_ENABLED:true}
+  internal-send-enabled: ${INTERNAL_SEND_ENABLED:true}
