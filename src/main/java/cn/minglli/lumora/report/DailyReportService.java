@@ -38,7 +38,21 @@ public class DailyReportService {
     @Transactional
     public DailyReportSnapshot getOrCreateAutoSnapshot() {
         ReportWindow window = ReportWindow.forYesterday(clock, properties.getZone());
-        DailyReportRecord existing = mapper.findByDateAndVersion(window.reportDate(), 1);
+        return getOrCreateSnapshotForDate(window.reportDate(), false);
+    }
+
+    @Transactional
+    public DailyReportSnapshot getOrCreateSnapshotForDate(LocalDate date, boolean regenerate) {
+        ReportWindow window = ReportWindow.forDate(date, properties.getZone());
+        if (regenerate) {
+            Integer maxVersion = mapper.findMaxVersion(window.reportDate());
+            int nextVersion = (maxVersion == null ? 0 : maxVersion) + 1;
+            Instant cutoff = clock.instant();
+            DailyReportSnapshot snapshot = aggregate(window, cutoff, nextVersion);
+            mapper.insertSnapshot(toRecord(snapshot, cutoff));
+            return snapshot;
+        }
+        DailyReportRecord existing = mapper.findLatestVersion(window.reportDate());
         if (existing != null) {
             return deserialize(existing);
         }
@@ -48,7 +62,7 @@ public class DailyReportService {
             mapper.insertSnapshot(toRecord(snapshot, cutoff));
             return snapshot;
         } catch (DuplicateKeyException exception) {
-            DailyReportRecord winner = mapper.findByDateAndVersion(window.reportDate(), 1);
+            DailyReportRecord winner = mapper.findLatestVersion(window.reportDate());
             if (winner == null) {
                 throw exception;
             }
@@ -59,12 +73,7 @@ public class DailyReportService {
     @Transactional
     public DailyReportSnapshot regenerateSnapshot() {
         ReportWindow window = ReportWindow.forYesterday(clock, properties.getZone());
-        Integer maxVersion = mapper.findMaxVersion(window.reportDate());
-        int nextVersion = (maxVersion == null ? 0 : maxVersion) + 1;
-        Instant cutoff = clock.instant();
-        DailyReportSnapshot snapshot = aggregate(window, cutoff, nextVersion);
-        mapper.insertSnapshot(toRecord(snapshot, cutoff));
-        return snapshot;
+        return getOrCreateSnapshotForDate(window.reportDate(), true);
     }
 
     public DailyReportSnapshot loadLatest(LocalDate reportDate) {

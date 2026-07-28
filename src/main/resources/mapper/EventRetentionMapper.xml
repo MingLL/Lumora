@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="cn.minglli.lumora.event.EventRetentionMapper">
+
+    <update id="nullCoordinatesOlderThan">
+        UPDATE wechat_event
+        SET latitude = NULL,
+            longitude = NULL,
+            location_precision = NULL
+        WHERE received_at &lt; #{cutoff}
+    </update>
+
+    <delete id="deleteDeliveriesOlderThan">
+        DELETE FROM report_delivery_attempt
+        WHERE created_at &lt; #{cutoff}
+    </delete>
+
+    <delete id="deleteUnreferencedReportsOlderThan">
+        DELETE FROM daily_report
+        WHERE created_at &lt; #{cutoff}
+          AND id NOT IN (
+              SELECT report_id FROM report_delivery_attempt
+          )
+    </delete>
+
+    <delete id="deleteEventsOlderThan">
+        DELETE FROM wechat_event
+        WHERE received_at &lt; #{cutoff}
+    </delete>
+</mapper>
