@@ -1,11 +1,14 @@
 # 部署说明
 
+这里只讲**前端静态站**（`frontend/`）的部署。后端服务（`backend/`）自带
+Dockerfile，是独立的容器，还没接进这套 k3s 清单。
+
 ## 架构
 
-站点是纯静态产物，服务器上不跑 Node —— 构建在本地完成，只把 `dist/` 推上去。
+站点是纯静态产物，服务器上不跑 Node —— 构建在本地完成，只把 `frontend/dist/` 推上去。
 
 ```
-本地  npm run build  →  dist/
+本地  (cd frontend && npm run build)  →  frontend/dist/
         │
         ├── rsync ──→ dev1:/opt/lumora/site
         └── rsync ──→ dev2:/opt/lumora/site
@@ -34,13 +37,15 @@ Traefik 是 k3s 自带的，不需要额外装 ingress controller。
 
 ```bash
 ./deploy/deploy.sh                # 构建 + 同步 + 应用清单
-./deploy/deploy.sh --skip-build   # 跳过构建，直接发已有的 dist/
+./deploy/deploy.sh --skip-build   # 跳过构建，直接发已有的 frontend/dist/
 ```
+
+脚本在仓库根目录执行，构建那步会自己进 `frontend/`，不用手动切目录。
 
 新增文章后，如果用到了以前没出现过的字，先重新生成字体子集再发布：
 
 ```bash
-npm run build && npm run fonts && ./deploy/deploy.sh
+(cd frontend && npm run build && npm run fonts) && ./deploy/deploy.sh
 ```
 
 （`npm run fonts` 需要读 `dist/` 才能判断哪些字用手写体，所以先 build 一次。
@@ -51,7 +56,7 @@ npm run build && npm run fonts && ./deploy/deploy.sh
 - **只改了文章/样式** → 同步文件即可，pod 不重启，发布零中断
 - **改了 nginx 配置** → 清单 hash 变化，自动滚动重启
 
-`rsync --delete` 保证服务器上的文件与 `dist/` 严格一致，删掉的页面不会留下孤儿文件。
+`rsync --delete` 保证服务器上的文件与 `frontend/dist/` 严格一致，删掉的页面不会留下孤儿文件。
 
 ## 待办：放行 dev2 的 80 端口
 
@@ -78,7 +83,7 @@ aliyun ecs AuthorizeSecurityGroup --RegionId cn-heyuan \
 
 1. 域名解析加 A 记录，指向 `47.120.54.233`（放行 dev2 后可以两个 IP 都加做轮询）。
 
-2. 改 `astro.config.mjs` 的 `site`，这决定 canonical / sitemap / RSS 里的绝对地址：
+2. 改 `frontend/astro.config.mjs` 的 `site`，这决定 canonical / sitemap / RSS 里的绝对地址：
 
    ```js
    site: 'https://你的域名',

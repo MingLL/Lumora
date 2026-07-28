@@ -1,4 +1,8 @@
-# Lumora
+# Lumora · Backend
+
+The backend half of the Lumora repo — see the [root README](../README.md) for the
+overall layout, and [../frontend](../frontend) for the Astro site. All commands
+below run from `backend/`.
 
 WeChat Official Account daily reporting service. Receives WeChat callback events via the XML message callback protocol, stores them with deduplication, and generates daily email reports at 7:00 AM (Shanghai time) delivered through QQ SMTP.
 
@@ -22,12 +26,18 @@ WeChat Official Account daily reporting service. Receives WeChat callback events
 ## Quick Start
 
 ```bash
-# Build
-./mvnw -DskipTests package
+# Build (no Maven wrapper in this repo — use a local mvn 3.9+)
+mvn -DskipTests package
 
-# Run
-docker compose up
+# Test (needs Docker: Testcontainers starts a MySQL instance)
+mvn test
+
+# Run as a container
+docker build -t lumora-backend .
+docker run --env-file .env -p 8080:8080 lumora-backend
 ```
+
+Copy `.env.example` to `.env` and fill it in before running.
 
 ## Configuration
 

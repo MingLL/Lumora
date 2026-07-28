@@ -3,8 +3,9 @@
 # 一键发布：本地构建 → 同步到两台服务器 → 应用 k8s 清单
 #
 #   ./deploy/deploy.sh                只发内容（默认，先构建）
-#   ./deploy/deploy.sh --skip-build   跳过构建，直接发已有的 dist/
+#   ./deploy/deploy.sh --skip-build   跳过构建，直接发已有的 frontend/dist/
 #
+# 只管前端静态站，跟 backend/ 无关 —— 后端是独立的 Spring Boot 容器。
 # 站点是纯静态的，服务器上不需要 Node —— 构建在本地完成，只把 dist/ 推上去。
 set -euo pipefail
 
@@ -12,6 +13,8 @@ HOSTS=(dev1 dev2)
 CONTROL_HOST=dev1                          # 跑 kubectl 的节点（k3s control-plane）
 SITE_IPS=(47.120.54.233 47.120.64.186)
 REMOTE_DIR=/opt/lumora/site
+FRONTEND_DIR=frontend                      # Astro 站点的根，npm 相关的都在里面
+DIST=$FRONTEND_DIR/dist
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$REPO_ROOT"
@@ -24,19 +27,21 @@ skip_build=false
 
 if [[ "$skip_build" == false ]]; then
   step "本地构建"
-  npm run build
+  # 在子 shell 里进 frontend/ 构建，外面的 cwd 仍是仓库根，
+  # 下面 deploy/k8s/lumora.yaml 那类相对路径才不用跟着改。
+  ( cd "$FRONTEND_DIR" && npm run build )
 else
-  step "跳过构建，使用现有 dist/"
+  step "跳过构建，使用现有 $DIST/"
 fi
 
-[[ -f dist/index.html ]] || fail "dist/index.html 不存在，请先执行 npm run build"
+[[ -f $DIST/index.html ]] || fail "$DIST/index.html 不存在，请先执行 (cd $FRONTEND_DIR && npm run build)"
 
 step "同步静态文件 → ${HOSTS[*]}"
 for h in "${HOSTS[@]}"; do
   printf '    %s ' "$h"
   # --delete 让服务器上的文件与 dist/ 严格一致，删掉的页面不会留下孤儿。
   # 不用 --chmod：macOS 自带的是 openrsync，不支持该参数；权限在下一步统一校正。
-  rsync -az --delete dist/ "$h:$REMOTE_DIR/"
+  rsync -az --delete "$DIST/" "$h:$REMOTE_DIR/"
   ssh "$h" "chmod -R a+rX '$REMOTE_DIR'"
   printf '✓\n'
 done

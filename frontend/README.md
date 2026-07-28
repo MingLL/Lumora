@@ -1,6 +1,9 @@
-# 远方有温度
+# 远方有温度 · 前端
 
 一个面向个人公众号内容整理的 Astro 静态网站。主题是「远方有温度」：一个普通人的成长、城市与生活记录。
+
+这是 Lumora 仓库的前端部分。后端服务见 [../backend](../backend)，
+仓库整体结构见 [根目录 README](../README.md)。**下面的命令都在 `frontend/` 里执行。**
 
 ## 技术栈
 
@@ -132,11 +135,13 @@ npm run build && npm run fonts
 站点已部署在自有服务器（dev1 / dev2 上的 k3s 集群），当前可通过
 http://47.120.54.233 访问。
 
+发布脚本在仓库根目录（它会自己进 `frontend/` 构建）：
+
 ```bash
-./deploy/deploy.sh          # 构建 + 同步到两台服务器 + 应用 k8s 清单
+cd .. && ./deploy/deploy.sh    # 构建 + 同步到两台服务器 + 应用 k8s 清单
 ```
 
-架构说明、接域名和 HTTPS 的步骤、排查命令见 [deploy/README.md](deploy/README.md)。
+架构说明、接域名和 HTTPS 的步骤、排查命令见 [../deploy/README.md](../deploy/README.md)。
 
 以下是托管平台的备选方案。
 
