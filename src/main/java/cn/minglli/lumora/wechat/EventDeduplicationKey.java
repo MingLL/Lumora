@@ -25,36 +25,42 @@ public final class EventDeduplicationKey {
             return "msgid:" + message.msgId();
         }
 
-        MessageDigest digest = sha256Digest();
-        updateField(digest, message.appId());
-        updateField(digest, message.openId());
-        updateField(digest, message.msgType());
-        updateField(digest, message.event());
-        updateField(
-                digest,
+        return "sha256:" + sha256Hex(fallbackFingerprintInput(message));
+    }
+
+    static byte[] fallbackFingerprintInput(WechatInboundMessage message) {
+        ByteArrayOutputStream output = new ByteArrayOutputStream();
+        writeField(output, message.appId());
+        writeField(output, message.openId());
+        writeField(output, message.msgType());
+        writeField(output, message.event());
+        writeField(
+                output,
                 message.createTimeEpochSeconds() == null
                         ? null
                         : Long.toString(message.createTimeEpochSeconds()));
-        updateField(digest, message.eventKey());
-        updateField(digest, message.ticket());
-        updateField(digest, canonicalDecimal(message.latitude()));
-        updateField(digest, canonicalDecimal(message.longitude()));
-        updateField(digest, canonicalDecimal(message.locationPrecision()));
+        writeField(output, message.eventKey());
+        writeField(output, message.ticket());
+
+        ByteArrayOutputStream coordinates = new ByteArrayOutputStream();
+        writeField(coordinates, canonicalDecimal(message.latitude()));
+        writeField(coordinates, canonicalDecimal(message.longitude()));
+        writeField(coordinates, canonicalDecimal(message.locationPrecision()));
+        writeField(output, coordinates.toByteArray());
 
         Optional<CompositeFingerprint> compositeFingerprint =
                 compositeFingerprint(message.composite());
         if (compositeFingerprint.isEmpty()) {
-            digest.update(NULL_FIELD);
+            output.writeBytes(NULL_FIELD);
         } else {
             CompositeFingerprint fingerprint = compositeFingerprint.orElseThrow();
             ByteArrayOutputStream descriptor = new ByteArrayOutputStream();
             writeField(descriptor, fingerprint.type());
             writeField(descriptor, Integer.toString(fingerprint.itemCount()));
             writeField(descriptor, fingerprint.contentSha256());
-            updateField(digest, descriptor.toByteArray());
+            writeField(output, descriptor.toByteArray());
         }
-
-        return "sha256:" + HexFormat.of().formatHex(digest.digest());
+        return output.toByteArray();
     }
 
     public static Optional<CompositeFingerprint> compositeFingerprint(
@@ -121,19 +127,6 @@ public final class EventDeduplicationKey {
             return canonicalDecimal(decimal);
         }
         return String.valueOf(value);
-    }
-
-    private static void updateField(MessageDigest digest, String value) {
-        if (value == null) {
-            digest.update(NULL_FIELD);
-            return;
-        }
-        updateField(digest, value.getBytes(StandardCharsets.UTF_8));
-    }
-
-    private static void updateField(MessageDigest digest, byte[] value) {
-        digest.update(intBytes(value.length));
-        digest.update(value);
     }
 
     private static void writeField(ByteArrayOutputStream output, String value) {

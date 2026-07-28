@@ -29,6 +29,48 @@ class EventDeduplicationKeyTest {
     }
 
     @Test
+    void formatsLiteralMessageIdFastPath() {
+        var message = baseMessage().msgId(12_345L).build();
+
+        assertThat(EventDeduplicationKey.forMessage(message)).isEqualTo("msgid:12345");
+    }
+
+    @Test
+    void fallbackPreimageHasExactlyNineTopLevelFieldsWithOneCoordinateTuple() {
+        var message = WechatInboundMessage.builder()
+                .appId("a")
+                .openId("b")
+                .msgType("event")
+                .event("LOCATION")
+                .createTimeEpochSeconds(1L)
+                .eventKey(null)
+                .ticket("")
+                .latitude(new BigDecimal("1.200"))
+                .longitude(null)
+                .locationPrecision(new BigDecimal("-0.00"))
+                .build();
+
+        String expectedNineFieldPreimageHex =
+                "0000000161"
+                        + "0000000162"
+                        + "000000056576656e74"
+                        + "000000084c4f434154494f4e"
+                        + "0000000131"
+                        + "ffffffff"
+                        + "00000000"
+                        + "00000010"
+                        + "00000003312e32ffffffff0000000130"
+                        + "ffffffff";
+
+        assertThat(HexFormat.of().formatHex(
+                        EventDeduplicationKey.fallbackFingerprintInput(message)))
+                .isEqualTo(expectedNineFieldPreimageHex);
+        assertThat(EventDeduplicationKey.forMessage(message))
+                .isEqualTo(
+                        "sha256:222675bc258e4056303ce180a354082b7a29102b4d2ebff4f421942627fb2ba5");
+    }
+
+    @Test
     void hashesExactFixedOrderLengthEncodedFields() {
         var message = baseMessage()
                 .eventKey("qrscene_campaign")
@@ -46,9 +88,10 @@ class EventDeduplicationKeyTest {
                 encoded("1700000000"),
                 encoded("qrscene_campaign"),
                 encoded("ticket"),
-                encoded("31.2304"),
-                encoded("121.4737"),
-                encoded("0"),
+                encodedBytes(concatenate(
+                        encoded("31.2304"),
+                        encoded("121.4737"),
+                        encoded("0"))),
                 encoded(null));
 
         assertThat(EventDeduplicationKey.forMessage(message))
@@ -177,9 +220,10 @@ class EventDeduplicationKeyTest {
                 encoded("1700000000"),
                 encoded(null),
                 encoded(null),
-                encoded(null),
-                encoded(null),
-                encoded(null),
+                encodedBytes(concatenate(
+                        encoded(null),
+                        encoded(null),
+                        encoded(null))),
                 encodedBytes(descriptor));
 
         assertThat(contentSha256)
@@ -189,9 +233,9 @@ class EventDeduplicationKeyTest {
                         .contentSha256())
                 .isEqualTo("4dd5f410ed63be15a91d4b01c3c2d9be5994df345490f5a02f755f5d7e3ad3f8");
         assertThat(completeDeduplicationKey)
-                .isEqualTo("sha256:56825d5855243a2703d7087d73d3fea34e62c6eb4933c13cba25cda0895b82df");
+                .isEqualTo("sha256:51def753bc8a607dba99c94247373cf6f1f6b04a75727c3f5647fca98c2c9f91");
         assertThat(EventDeduplicationKey.forMessage(message))
-                .isEqualTo("sha256:56825d5855243a2703d7087d73d3fea34e62c6eb4933c13cba25cda0895b82df");
+                .isEqualTo("sha256:51def753bc8a607dba99c94247373cf6f1f6b04a75727c3f5647fca98c2c9f91");
     }
 
     @Test
