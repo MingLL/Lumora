@@ -1,0 +1,128 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="cn.minglli.lumora.event.WechatEventMapper">
+
+    <resultMap id="wechatEventResult" type="cn.minglli.lumora.event.WechatEvent">
+        <constructor>
+            <idArg column="id" javaType="java.lang.Long"/>
+            <arg column="app_id" javaType="java.lang.String"/>
+            <arg column="open_id" javaType="java.lang.String"/>
+            <arg column="event_type" javaType="cn.minglli.lumora.event.EventType"/>
+            <arg column="raw_msg_type" javaType="java.lang.String"/>
+            <arg column="raw_event" javaType="java.lang.String"/>
+            <arg column="message_id" javaType="java.lang.Long"/>
+            <arg column="original_occurred_at" javaType="java.time.Instant"/>
+            <arg column="effective_occurred_at" javaType="java.time.Instant"/>
+            <arg column="received_at" javaType="java.time.Instant"/>
+            <arg column="anomalous_timestamp" javaType="_boolean"/>
+            <arg column="deduplication_key" javaType="java.lang.String"/>
+            <arg column="raw_event_key" javaType="java.lang.String"/>
+            <arg column="qr_scene" javaType="java.lang.String"/>
+            <arg column="ticket" javaType="java.lang.String"/>
+            <arg column="ticket_present" javaType="_boolean"/>
+            <arg column="menu_key" javaType="java.lang.String"/>
+            <arg column="menu_url" javaType="java.lang.String"/>
+            <arg column="latitude" javaType="java.math.BigDecimal"/>
+            <arg column="longitude" javaType="java.math.BigDecimal"/>
+            <arg column="location_precision" javaType="java.math.BigDecimal"/>
+            <arg column="composite_type" javaType="java.lang.String"/>
+            <arg column="composite_item_count" javaType="java.lang.Integer"/>
+            <arg column="composite_sha256" javaType="java.lang.String"/>
+            <arg column="safe_summary" javaType="java.lang.String"/>
+            <arg column="normalized_message_sha256" javaType="java.lang.String"/>
+            <arg column="created_at" javaType="java.time.Instant"/>
+        </constructor>
+    </resultMap>
+
+    <insert id="insert">
+        INSERT INTO wechat_event (
+            app_id,
+            open_id,
+            event_type,
+            raw_msg_type,
+            raw_event,
+            message_id,
+            original_occurred_at,
+            effective_occurred_at,
+            received_at,
+            anomalous_timestamp,
+            deduplication_key,
+            raw_event_key,
+            qr_scene,
+            ticket,
+            ticket_present,
+            menu_key,
+            menu_url,
+            latitude,
+            longitude,
+            location_precision,
+            composite_type,
+            composite_item_count,
+            composite_sha256,
+            safe_summary,
+            normalized_message_sha256
+        ) VALUES (
+            #{appId},
+            #{openId},
+            #{eventType},
+            #{rawMsgType},
+            #{rawEvent,jdbcType=VARCHAR},
+            #{messageId,jdbcType=BIGINT},
+            #{originalOccurredAt},
+            #{effectiveOccurredAt},
+            #{receivedAt},
+            #{anomalousTimestamp},
+            #{deduplicationKey},
+            #{rawEventKey,jdbcType=VARCHAR},
+            #{qrScene,jdbcType=VARCHAR},
+            #{ticket,jdbcType=VARCHAR},
+            #{ticketPresent},
+            #{menuKey,jdbcType=VARCHAR},
+            #{menuUrl,jdbcType=VARCHAR},
+            #{latitude,jdbcType=DECIMAL},
+            #{longitude,jdbcType=DECIMAL},
+            #{locationPrecision,jdbcType=DECIMAL},
+            #{compositeType,jdbcType=VARCHAR},
+            #{compositeItemCount,jdbcType=INTEGER},
+            #{compositeSha256,jdbcType=CHAR},
+            #{safeSummary},
+            #{normalizedMessageSha256}
+        )
+    </insert>
+
+    <select id="findByAppIdAndDeduplicationKey" resultMap="wechatEventResult">
+        SELECT
+            id,
+            app_id,
+            open_id,
+            event_type,
+            raw_msg_type,
+            raw_event,
+            message_id,
+            original_occurred_at,
+            effective_occurred_at,
+            received_at,
+            anomalous_timestamp,
+            deduplication_key,
+            raw_event_key,
+            qr_scene,
+            ticket,
+            ticket_present,
+            menu_key,
+            menu_url,
+            latitude,
+            longitude,
+            location_precision,
+            composite_type,
+            composite_item_count,
+            composite_sha256,
+            safe_summary,
+            normalized_message_sha256,
+            created_at
+        FROM wechat_event
+        WHERE app_id = #{appId}
+          AND deduplication_key = #{deduplicationKey}
+    </select>
+</mapper>
