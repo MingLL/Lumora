@@ -43,5 +43,13 @@ public interface DailyReportMapper {
 
     DailyReportRecord findLatestVersion(@Param("reportDate") LocalDate reportDate);
 
+    /**
+     * Same as {@link #findLatestVersion} but as a locking read, which sees the
+     * latest committed row instead of the transaction's REPEATABLE READ snapshot.
+     * Used to recover after losing an insert race, where the snapshot predates the
+     * winner's commit and a plain read would still return nothing.
+     */
+    DailyReportRecord findLatestVersionForShare(@Param("reportDate") LocalDate reportDate);
+
     Integer findMaxVersion(@Param("reportDate") LocalDate reportDate);
 }

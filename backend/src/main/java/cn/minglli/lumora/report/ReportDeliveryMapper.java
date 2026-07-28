@@ -9,7 +9,11 @@ import org.apache.ibatis.annotations.Param;
 @Mapper
 public interface ReportDeliveryMapper {
 
-    int upsertAuto(@Param("deliveryId") String deliveryId, @Param("reportId") Long reportId);
+    int upsertAuto(
+            @Param("deliveryId") String deliveryId,
+            @Param("reportId") Long reportId,
+            @Param("recipientMasked") String recipientMasked,
+            @Param("recipientSha256") String recipientSha256);
 
     ReportDeliveryRecord findAutoByReportId(@Param("reportId") Long reportId);
 
@@ -34,8 +38,6 @@ public interface ReportDeliveryMapper {
 
     int markPendingRetry(@Param("id") Long id, @Param("now") Instant now,
                          @Param("errorClass") String errorClass, @Param("errorSummary") String errorSummary);
-
-    int reclaimStale(@Param("now") Instant now, @Param("leaseUntil") Instant leaseUntil);
 
     List<ReportDeliveryRecord> findRecoverable(@Param("now") Instant now);
 

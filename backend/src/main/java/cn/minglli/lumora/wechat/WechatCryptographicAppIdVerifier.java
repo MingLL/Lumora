@@ -11,13 +11,28 @@ import me.chanjar.weixin.mp.util.crypto.WxMpCryptUtil;
 /**
  * Verifies the AppID trailer in a WeChat AES frame without implementing AES.
  *
- * <p>Weixin Java 4.7.0's public decrypt method parses the trailer but returns
- * only the message and does not compare the trailer. It exposes no frame-level
- * hook. This adapter therefore asks that same library decrypt primitive to
- * return message plus trailer by changing only the encrypted frame's
- * four-byte length field. AES, padding, and normal decryption remain entirely
- * inside Weixin Java. A second one-byte probe proves that the trailer ends
- * exactly after the expected AppID. Any unexpected frame behavior fails closed.
+ * <p>A WeChat frame is {@code [16 random bytes][4-byte big-endian length][message][AppID]},
+ * AES-CBC encrypted with the IV taken from the key. Weixin Java 4.7.0's public
+ * decrypt method reads the length field and returns only the message, discarding
+ * the AppID trailer without comparing it, and exposes no frame-level hook.
+ *
+ * <p>This adapter therefore replays the same library primitive with the declared
+ * length raised to {@code message + AppID}. Under CBC, XOR-ing the first four
+ * ciphertext bytes flips exactly those bits of plaintext block 1 — the length
+ * field — while block 0, the discarded random prefix, becomes garbage. The second
+ * decrypt then returns message plus trailer, which is compared in constant time
+ * against the expected concatenation. AES, padding and key handling stay entirely
+ * inside Weixin Java.
+ *
+ * <p>Any unexpected frame behaviour fails closed: a malformed frame, a shifted
+ * trailer or a library change all surface as an exception or a mismatch, and the
+ * caller rejects the callback with 403.
+ *
+ * <p><strong>Upgrade note:</strong> this depends on Weixin Java's frame layout and
+ * on {@code decrypt} honouring the embedded length field. Re-run the encrypted
+ * callback tests in {@code WechatCallbackControllerTest} before changing the
+ * {@code weixin-java-mp} version — a silent behaviour change here rejects every
+ * encrypted callback rather than failing loudly.
  */
 final class WechatCryptographicAppIdVerifier {
 

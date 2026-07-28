@@ -52,7 +52,7 @@ class WechatEventRepositoryTest extends MySqlContainerTest {
                 "received_at", "timestamp(6)|NO|",
                 "anomalous_timestamp", "tinyint(1)|NO|DEFAULT 0",
                 "deduplication_key", "varchar(71)|NO|",
-                "raw_event_key", "varchar(512)|YES|",
+                "raw_event_key", "varchar(2048)|YES|",
                 "qr_scene", "varchar(512)|YES|",
                 "ticket", "varchar(512)|YES|",
                 "ticket_present", "tinyint(1)|NO|DEFAULT 0",
@@ -120,7 +120,8 @@ class WechatEventRepositoryTest extends MySqlContainerTest {
                 "PRIMARY", "UNIQUE:id",
                 "uq_event_dedup", "UNIQUE:app_id,deduplication_key",
                 "ix_event_report", "NONUNIQUE:effective_occurred_at,event_type",
-                "ix_event_user", "NONUNIQUE:open_id,effective_occurred_at"));
+                "ix_event_user", "NONUNIQUE:open_id,effective_occurred_at",
+                "ix_event_received_at", "NONUNIQUE:received_at"));
         assertThat(indexes("daily_report")).containsExactlyInAnyOrderEntriesOf(mapOf(
                 "PRIMARY", "UNIQUE:id",
                 "uq_report_version", "UNIQUE:report_date,version"));

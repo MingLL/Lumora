@@ -111,6 +111,26 @@ class ManualReportControllerTest {
     }
 
     @Test
+    void internalSendDisabledReturns503AndNeverDelivers() throws Exception {
+        LumoraProperties disabled = new LumoraProperties();
+        disabled.setReportAdminKey(ADMIN_KEY);
+        disabled.setZone(ZoneId.of("Asia/Shanghai"));
+        disabled.setInternalSendEnabled(false);
+        MockMvc candidate = MockMvcBuilders
+                .standaloneSetup(new ManualReportController(
+                        dailyReportService, dailyReportMapper, deliveryService, disabled, CLOCK))
+                .addInterceptors(new AdminKeyInterceptor(disabled))
+                .build();
+
+        candidate.perform(post("/internal/reports/{date}/send", LocalDate.of(2026, 7, 27))
+                        .header("X-Lumora-Admin-Key", ADMIN_KEY)
+                        .header("X-Request-Id", "req-1"))
+                .andExpect(status().isServiceUnavailable());
+
+        org.mockito.Mockito.verifyNoInteractions(deliveryService);
+    }
+
+    @Test
     void activeDeliveryConflictReturns409() throws Exception {
         LocalDate date = LocalDate.of(2026, 7, 27);
         when(dailyReportService.getOrCreateSnapshotForDate(eq(date), anyBoolean())).thenReturn(snapshot(date));

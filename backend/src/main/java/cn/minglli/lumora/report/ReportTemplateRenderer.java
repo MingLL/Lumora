@@ -1,10 +1,12 @@
 package cn.minglli.lumora.report;
 
+import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.time.format.FormatStyle;
 import java.util.List;
 import java.util.Locale;
 
+import cn.minglli.lumora.config.LumoraProperties;
 import org.springframework.stereotype.Component;
 
 @Component
@@ -13,6 +15,12 @@ public class ReportTemplateRenderer {
     private static final String MISSING_LABEL = "（未提供）";
     private static final DateTimeFormatter GENERATED_AT_FORMATTER =
             DateTimeFormatter.ofLocalizedDateTime(FormatStyle.FULL).withLocale(Locale.CHINA);
+
+    private final ZoneId zone;
+
+    public ReportTemplateRenderer(LumoraProperties properties) {
+        this.zone = properties.getZone();
+    }
 
     public RenderedReport render(DailyReportSnapshot snapshot, String originalId) {
         String subject = subject(snapshot, originalId);
@@ -245,8 +253,7 @@ public class ReportTemplateRenderer {
     }
 
     private String generatedAt(DailyReportSnapshot snapshot) {
-        return snapshot.generatedAt().atZone(java.time.ZoneId.of("Asia/Shanghai"))
-                .format(GENERATED_AT_FORMATTER);
+        return snapshot.generatedAt().atZone(zone).format(GENERATED_AT_FORMATTER);
     }
 
     private String escape(String value) {

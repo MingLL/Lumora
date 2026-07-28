@@ -62,7 +62,9 @@ public class DailyReportService {
             mapper.insertSnapshot(toRecord(snapshot, cutoff));
             return snapshot;
         } catch (DuplicateKeyException exception) {
-            DailyReportRecord winner = mapper.findLatestVersion(window.reportDate());
+            // A concurrent creator committed version 1 first. Our transaction's read
+            // view predates that commit, so only a locking read can see the winner.
+            DailyReportRecord winner = mapper.findLatestVersionForShare(window.reportDate());
             if (winner == null) {
                 throw exception;
             }
@@ -76,9 +78,13 @@ public class DailyReportService {
         return getOrCreateSnapshotForDate(window.reportDate(), true);
     }
 
-    public DailyReportSnapshot loadLatest(LocalDate reportDate) {
-        DailyReportRecord record = mapper.findLatestVersion(reportDate);
-        return record == null ? null : deserialize(record);
+    /**
+     * Loads the snapshot of one specific stored version. Delivery must render the
+     * version its attempt row references, not whatever version is newest by then —
+     * otherwise a regenerate between claim and send mails v2 content under a v1 audit row.
+     */
+    public DailyReportSnapshot load(DailyReportRecord record) {
+        return deserialize(record);
     }
 
     private DailyReportSnapshot aggregate(ReportWindow window, Instant cutoff, int version) {

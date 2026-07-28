@@ -6,7 +6,8 @@ import java.time.ZoneId;
 import java.time.ZonedDateTime;
 
 import cn.minglli.lumora.config.LumoraProperties;
-import jakarta.validation.constraints.NotBlank;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -19,6 +20,8 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @RequestMapping("/internal/reports")
 public class ManualReportController {
+
+    private static final Logger log = LoggerFactory.getLogger(ManualReportController.class);
 
     private final DailyReportService dailyReportService;
     private final DailyReportMapper dailyReportMapper;
@@ -42,8 +45,14 @@ public class ManualReportController {
     @PostMapping("/{date}/send")
     public ResponseEntity<ManualSendResponse> send(
             @PathVariable("date") LocalDate date,
-            @RequestHeader("X-Request-Id") @NotBlank String requestId,
+            @RequestHeader("X-Request-Id") String requestId,
             @RequestBody(required = false) ManualSendRequest request) {
+        if (!properties.isInternalSendEnabled()) {
+            log.warn("Rejected manual send while internal sending is disabled requestId={} date={}",
+                    requestId, date);
+            return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).body(
+                    new ManualSendResponse("DISABLED", "Internal sending is disabled", null));
+        }
         ZoneId zone = properties.getZone();
         LocalDate today = ZonedDateTime.now(clock).withZoneSameInstant(zone).toLocalDate();
         if (!date.isBefore(today)) {
@@ -61,6 +70,8 @@ public class ManualReportController {
         }
         ReportDeliveryService.DeliveryOutcome outcome =
                 deliveryService.sendManual(record.id(), requestId, force);
+        log.info("Manual send requestId={} date={} regenerate={} force={} result={} deliveryId={}",
+                requestId, date, regenerate, force, outcome.result(), outcome.deliveryId());
         return ResponseEntity.status(httpStatus(outcome))
                 .body(new ManualSendResponse(outcome.result().name(), outcome.errorSummary(), outcome.deliveryId()));
     }

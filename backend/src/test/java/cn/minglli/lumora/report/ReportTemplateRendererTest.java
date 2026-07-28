@@ -2,8 +2,10 @@ package cn.minglli.lumora.report;
 
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.ZoneId;
 import java.util.List;
 
+import cn.minglli.lumora.config.LumoraProperties;
 import cn.minglli.lumora.event.EventType;
 import org.junit.jupiter.api.Test;
 
@@ -11,7 +13,13 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 class ReportTemplateRendererTest {
 
-    private final ReportTemplateRenderer renderer = new ReportTemplateRenderer();
+    private final ReportTemplateRenderer renderer = rendererForZone(ZoneId.of("Asia/Shanghai"));
+
+    private static ReportTemplateRenderer rendererForZone(ZoneId zone) {
+        LumoraProperties properties = new LumoraProperties();
+        properties.setZone(zone);
+        return new ReportTemplateRenderer(properties);
+    }
 
     @Test
     void rendersHtmlAndTextWithDateVersionAndGenerationTime() {
@@ -70,6 +78,19 @@ class ReportTemplateRendererTest {
 
         assertThat(rendered.htmlBody()).doesNotContain("31.2304167").doesNotContain("121.4737012");
         assertThat(rendered.textBody()).doesNotContain("31.2304167").doesNotContain("121.4737012");
+    }
+
+    @Test
+    void generationTimeFollowsTheConfiguredZoneRatherThanAFixedOne() {
+        DailyReportSnapshot snapshot = snapshot(false);
+
+        // 2026-07-28T02:00:00Z is 10:00 in Shanghai and 02:00 in UTC.
+        ReportTemplateRenderer.RenderedReport shanghai = renderer.render(snapshot, "gh_original");
+        ReportTemplateRenderer.RenderedReport utc =
+                rendererForZone(ZoneId.of("UTC")).render(snapshot, "gh_original");
+
+        assertThat(shanghai.textBody()).contains("10:00:00");
+        assertThat(utc.textBody()).contains("2:00:00").doesNotContain("10:00:00");
     }
 
     private DailyReportSnapshot snapshot(boolean emptyDay) {

@@ -125,6 +125,20 @@ class ReportDeliveryServiceTest {
     }
 
     @Test
+    void autoDeliveryRecordsTheMaskedRecipientSnapshotJustLikeManual() {
+        properties.setReportRecipients(List.of("owner@example.com", "ops@qq.com"));
+
+        service.runAutoReport();
+
+        ArgumentCaptor<String> masked = ArgumentCaptor.forClass(String.class);
+        ArgumentCaptor<String> sha = ArgumentCaptor.forClass(String.class);
+        verify(deliveryMapper).upsertAuto(
+                any(), org.mockito.ArgumentMatchers.eq(1L), masked.capture(), sha.capture());
+        assertThat(masked.getValue()).isEqualTo("o***@example.com,o***@qq.com");
+        assertThat(sha.getValue()).hasSize(64).isNotBlank();
+    }
+
+    @Test
     void stableMessageIdCarriesReportDateVersionAndDeliveryId() {
         ArgumentCaptor<MailGateway.MailRequest> captor = ArgumentCaptor.forClass(MailGateway.MailRequest.class);
 

@@ -10,6 +10,9 @@
             longitude = NULL,
             location_precision = NULL
         WHERE received_at &lt; #{cutoff}
+          AND (latitude IS NOT NULL
+               OR longitude IS NOT NULL
+               OR location_precision IS NOT NULL)
     </update>
 
     <delete id="deleteDeliveriesOlderThan">

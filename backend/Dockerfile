@@ -3,9 +3,12 @@
 FROM maven:3.9-eclipse-temurin-17 AS build
 WORKDIR /workspace
 COPY pom.xml .
-RUN mvn -q -DskipTests package
+# Warm the dependency cache in its own layer. There is no src/ yet, so compilation
+# and repackaging are skipped -- without the skips, spring-boot:repackage aborts
+# the build with "Unable to find main class".
+RUN mvn -q -B -DskipTests -Dmaven.main.skip=true -Dspring-boot.repackage.skip=true package
 COPY src ./src
-RUN mvn -q -DskipTests package
+RUN mvn -q -B -DskipTests package
 
 FROM eclipse-temurin:17-jre
 RUN groupadd --system --gid 1001 lumora \

@@ -10,16 +10,30 @@ import cn.minglli.lumora.config.LumoraProperties;
 import cn.minglli.lumora.mail.MailGateway;
 import cn.minglli.lumora.mail.QqSmtpMailGateway;
 import jakarta.mail.AuthenticationFailedException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
+/**
+ * Drives report delivery.
+ *
+ * <p>Deliberately not {@code @Transactional}. Every mapper call runs in its own
+ * auto-committed statement so that the {@code claim} lease becomes visible to
+ * other instances the moment it is taken, and so that SMTP I/O and retry backoff
+ * never happen while a database transaction is open. Correctness comes from the
+ * unique constraints on {@code report_delivery_attempt} plus the conditional
+ * {@code claim} update, not from transaction scope.
+ */
 @Service
 public class ReportDeliveryService {
 
     static final int MAX_ATTEMPTS = 3;
     static final Duration LEASE = Duration.ofMinutes(10);
     private static final Duration[] BACKOFF = {Duration.ofSeconds(5), Duration.ofSeconds(30)};
+    private static final int MAX_RECIPIENT_MASK_LENGTH = 1024;
+
+    private static final Logger log = LoggerFactory.getLogger(ReportDeliveryService.class);
 
     private final DailyReportService dailyReportService;
     private final DailyReportMapper dailyReportMapper;
@@ -49,19 +63,19 @@ public class ReportDeliveryService {
         this.sleeper = sleeper;
     }
 
-    @Transactional
     public DeliveryOutcome runAutoReport() {
         DailyReportSnapshot snapshot = dailyReportService.getOrCreateAutoSnapshot();
         DailyReportRecord record = dailyReportMapper.findByDateAndVersion(
                 snapshot.reportDate(), snapshot.version());
         Long reportId = record.id();
 
-        deliveryMapper.upsertAuto(UUID.randomUUID().toString(), reportId);
+        RecipientSnapshot recipients = recipientSnapshot();
+        deliveryMapper.upsertAuto(
+                UUID.randomUUID().toString(), reportId, recipients.masked(), recipients.sha256());
         ReportDeliveryRecord delivery = deliveryMapper.findAutoByReportId(reportId);
         return deliver(delivery, snapshot);
     }
 
-    @Transactional
     public DeliveryOutcome recoverStaleDeliveries() {
         Instant now = clock.instant();
         List<ReportDeliveryRecord> stale = deliveryMapper.findRecoverable(now);
@@ -71,13 +85,11 @@ public class ReportDeliveryService {
             if (record == null) {
                 continue;
             }
-            DailyReportSnapshot snapshot = dailyReportService.loadLatest(record.reportDate());
-            last = deliver(delivery, snapshot);
+            last = deliver(delivery, dailyReportService.load(record));
         }
         return last;
     }
 
-    @Transactional
     public DeliveryOutcome sendManual(Long reportId, String requestId, boolean force) {
         ReportDeliveryRecord existing = deliveryMapper.findByReportIdAndRequestId(reportId, requestId);
         if (existing != null) {
@@ -91,20 +103,33 @@ public class ReportDeliveryService {
                 return DeliveryOutcome.alreadySent();
             }
         }
-        List<String> recipients = properties.getReportRecipients();
-        String masked = recipients.stream().map(RecipientCodec::mask)
-                .reduce((a, b) -> a + "," + b).orElse("");
-        String sha = RecipientCodec.sha256(recipients.stream().sorted().toList());
+        RecipientSnapshot recipients = recipientSnapshot();
         String deliveryId = UUID.randomUUID().toString();
         try {
-            deliveryMapper.insertManual(deliveryId, reportId, requestId, masked, sha);
+            deliveryMapper.insertManual(
+                    deliveryId, reportId, requestId, recipients.masked(), recipients.sha256());
         } catch (DuplicateKeyException exception) {
             return DeliveryOutcome.of(deliveryMapper.findByReportIdAndRequestId(reportId, requestId));
         }
         ReportDeliveryRecord delivery = deliveryMapper.findByDeliveryId(deliveryId);
         DailyReportRecord record = dailyReportMapper.findDailyReportById(reportId);
-        DailyReportSnapshot snapshot = dailyReportService.loadLatest(record.reportDate());
-        return deliver(delivery, snapshot);
+        return deliver(delivery, dailyReportService.load(record));
+    }
+
+    /**
+     * Masked addresses plus a digest of the sorted list, for the delivery audit row.
+     * Full addresses are read from protected configuration only at send time.
+     */
+    private RecipientSnapshot recipientSnapshot() {
+        List<String> recipients = properties.getReportRecipients();
+        String masked = String.join(",", recipients.stream().map(RecipientCodec::mask).toList());
+        if (masked.length() > MAX_RECIPIENT_MASK_LENGTH) {
+            masked = masked.substring(0, MAX_RECIPIENT_MASK_LENGTH);
+        }
+        return new RecipientSnapshot(masked, RecipientCodec.sha256(recipients.stream().sorted().toList()));
+    }
+
+    private record RecipientSnapshot(String masked, String sha256) {
     }
 
     private DeliveryOutcome deliver(ReportDeliveryRecord delivery, DailyReportSnapshot snapshot) {
@@ -120,12 +145,16 @@ public class ReportDeliveryService {
             Instant leaseUntil = now.plus(LEASE);
             int claimed = deliveryMapper.claim(delivery.id(), now, leaseUntil);
             if (claimed == 0) {
+                log.info("Delivery already claimed elsewhere deliveryId={} reportDate={}",
+                        delivery.deliveryId(), snapshot.reportDate());
                 return DeliveryOutcome.busy();
             }
             try {
                 mailGateway.send(new MailGateway.MailRequest(
                         recipients, rendered.subject(), rendered.htmlBody(), rendered.textBody(), messageId));
                 deliveryMapper.markSent(delivery.id(), clock.instant());
+                log.info("Delivery sent deliveryId={} reportDate={} version={} attempt={}",
+                        delivery.deliveryId(), snapshot.reportDate(), snapshot.version(), attempt);
                 return DeliveryOutcome.sent(delivery.deliveryId());
             } catch (QqSmtpMailGateway.MailDeliveryException exception) {
                 String errorClass = exception.getCause() == null
@@ -134,9 +163,15 @@ public class ReportDeliveryService {
                 String summary = exception.getMessage();
                 if (isPermanent(exception) || attempt >= MAX_ATTEMPTS) {
                     deliveryMapper.markFailed(delivery.id(), clock.instant(), errorClass, summary);
+                    log.error("Delivery failed permanently deliveryId={} reportDate={} attempt={} "
+                                    + "errorClass={} error={}",
+                            delivery.deliveryId(), snapshot.reportDate(), attempt, errorClass, summary);
                     return DeliveryOutcome.failed(delivery.deliveryId(), summary);
                 }
                 deliveryMapper.markPendingRetry(delivery.id(), clock.instant(), errorClass, summary);
+                log.warn("Delivery attempt failed, retrying deliveryId={} reportDate={} attempt={} "
+                                + "errorClass={} error={}",
+                        delivery.deliveryId(), snapshot.reportDate(), attempt, errorClass, summary);
                 sleeper.sleep(BACKOFF[attempt - 1].toMillis());
                 attempt++;
             }

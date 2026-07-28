@@ -7,16 +7,16 @@
     <resultMap id="eventTypeCount" type="cn.minglli.lumora.report.DailyReportSnapshot$EventTypeCount">
         <constructor>
             <arg column="eventType" javaType="cn.minglli.lumora.event.EventType"/>
-            <arg column="events" javaType="long"/>
-            <arg column="uniqueUsers" javaType="long"/>
+            <arg column="events" javaType="_long"/>
+            <arg column="uniqueUsers" javaType="_long"/>
         </constructor>
     </resultMap>
 
     <resultMap id="labelCount" type="cn.minglli.lumora.report.DailyReportSnapshot$LabelCount">
         <constructor>
             <arg column="label" javaType="java.lang.String"/>
-            <arg column="events" javaType="long"/>
-            <arg column="uniqueUsers" javaType="long"/>
+            <arg column="events" javaType="_long"/>
+            <arg column="uniqueUsers" javaType="_long"/>
         </constructor>
     </resultMap>
 
@@ -24,8 +24,8 @@
         <constructor>
             <arg column="rawEvent" javaType="java.lang.String"/>
             <arg column="eventKey" javaType="java.lang.String"/>
-            <arg column="events" javaType="long"/>
-            <arg column="uniqueUsers" javaType="long"/>
+            <arg column="events" javaType="_long"/>
+            <arg column="uniqueUsers" javaType="_long"/>
         </constructor>
     </resultMap>
 
@@ -33,7 +33,7 @@
         <constructor>
             <idArg column="id" javaType="java.lang.Long"/>
             <arg column="report_date" javaType="java.time.LocalDate"/>
-            <arg column="version" javaType="int"/>
+            <arg column="version" javaType="_int"/>
             <arg column="window_start" javaType="java.time.Instant"/>
             <arg column="window_end" javaType="java.time.Instant"/>
             <arg column="data_cutoff_at" javaType="java.time.Instant"/>
@@ -185,6 +185,16 @@
         WHERE report_date = #{reportDate}
         ORDER BY version DESC
         LIMIT 1
+    </select>
+
+    <select id="findLatestVersionForShare" resultMap="dailyReportRecord">
+        SELECT id, report_date, version, window_start, window_end,
+               data_cutoff_at, snapshot_json, created_at
+        FROM daily_report
+        WHERE report_date = #{reportDate}
+        ORDER BY version DESC
+        LIMIT 1
+        FOR SHARE
     </select>
 
     <select id="findMaxVersion" resultType="java.lang.Integer">

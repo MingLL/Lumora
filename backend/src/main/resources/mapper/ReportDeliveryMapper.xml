@@ -14,7 +14,7 @@
             <arg column="status" javaType="cn.minglli.lumora.report.DeliveryStatus"/>
             <arg column="recipient_masked" javaType="java.lang.String"/>
             <arg column="recipient_sha256" javaType="java.lang.String"/>
-            <arg column="attempt_count" javaType="int"/>
+            <arg column="attempt_count" javaType="_int"/>
             <arg column="claimed_at" javaType="java.time.Instant"/>
             <arg column="lease_until" javaType="java.time.Instant"/>
             <arg column="completed_at" javaType="java.time.Instant"/>
@@ -36,7 +36,8 @@
             delivery_id, report_id, trigger_type, status,
             recipient_masked, recipient_sha256
         ) VALUES (
-            #{deliveryId}, #{reportId}, 'AUTO', 'PENDING', '', ''
+            #{deliveryId}, #{reportId}, 'AUTO', 'PENDING',
+            #{recipientMasked}, #{recipientSha256}
         )
         ON DUPLICATE KEY UPDATE id = id
     </insert>
