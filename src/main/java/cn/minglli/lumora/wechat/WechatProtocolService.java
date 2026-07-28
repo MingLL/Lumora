@@ -23,6 +23,7 @@ public final class WechatProtocolService {
     private final String token;
     private final SafeXmlParser xmlParser;
     private final WxMpCryptUtil cryptUtil;
+    private final WechatCryptographicAppIdVerifier cryptographicAppIdVerifier;
 
     public WechatProtocolService(LumoraProperties properties, SafeXmlParser xmlParser) {
         this.appId = properties.getWechatAppId();
@@ -35,6 +36,7 @@ public final class WechatProtocolService {
         config.setToken(token);
         config.setAesKey(properties.getWechatAesKey());
         this.cryptUtil = new WxMpCryptUtil(config);
+        this.cryptographicAppIdVerifier = new WechatCryptographicAppIdVerifier();
     }
 
     public void validateAppId(String routeAppId) {
@@ -72,6 +74,9 @@ public final class WechatProtocolService {
             plaintext = cryptUtil.decrypt(ciphertext);
         } catch (RuntimeException exception) {
             throw WechatCallbackException.forbidden(exception);
+        }
+        if (!cryptographicAppIdVerifier.matches(cryptUtil, ciphertext, plaintext, appId)) {
+            throw WechatCallbackException.forbidden();
         }
 
         SafeXmlParser.ParsedXml decrypted = parseMessageXml(

@@ -310,6 +310,25 @@ class WechatCallbackControllerTest {
     }
 
     @Test
+    void encryptedDeeplyNestedXmlReturnsBadRequestWithoutPersistence() throws Exception {
+        StringBuilder inner = new StringBuilder("<xml>");
+        for (int depth = 1; depth <= SafeXmlParser.MAX_ELEMENT_DEPTH; depth++) {
+            inner.append("<node>");
+        }
+        inner.append("<tooDeep/>");
+        for (int depth = 1; depth <= SafeXmlParser.MAX_ELEMENT_DEPTH; depth++) {
+            inner.append("</node>");
+        }
+        inner.append("</xml>");
+        EncryptedRequest encrypted = encrypt(inner.toString(), APP_ID, ORIGINAL_ID);
+
+        mockMvc.perform(encryptedPost(APP_ID, encrypted))
+                .andExpect(status().isBadRequest());
+
+        assertThat(repository.calls).isZero();
+    }
+
+    @Test
     void encryptedOversizedBodyReturnsPayloadTooLarge() throws Exception {
         byte[] oversized = new byte[WechatCallbackController.MAX_REQUEST_BODY_BYTES + 1];
 
@@ -438,6 +457,17 @@ class WechatCallbackControllerTest {
     }
 
     @Test
+    void encryptedRejectsCryptographicAppIdMismatchWithoutXmlAppId() throws Exception {
+        EncryptedRequest encrypted = encryptWithoutEnvelopeAppId(
+                fixture("subscribe.xml"), "wx_wrong_cryptographic_app", ORIGINAL_ID);
+
+        mockMvc.perform(encryptedPost(APP_ID, encrypted))
+                .andExpect(status().isForbidden());
+
+        assertThat(repository.calls).isZero();
+    }
+
+    @Test
     void encryptedRejectsCorruptCiphertextWithValidMessageSignature() throws Exception {
         String corrupt = "not-valid-ciphertext";
         String timestamp = "1785240001";
@@ -482,14 +512,31 @@ class WechatCallbackControllerTest {
 
     private static EncryptedRequest encrypt(
             String plaintext, String appId, String outerOriginalId) {
+        return encrypt(plaintext, appId, outerOriginalId, true);
+    }
+
+    private static EncryptedRequest encryptWithoutEnvelopeAppId(
+            String plaintext, String cryptographicAppId, String outerOriginalId) {
+        return encrypt(plaintext, cryptographicAppId, outerOriginalId, false);
+    }
+
+    private static EncryptedRequest encrypt(
+            String plaintext,
+            String cryptographicAppId,
+            String outerOriginalId,
+            boolean includeEnvelopeAppId) {
         WxMpDefaultConfigImpl config = new WxMpDefaultConfigImpl();
-        config.setAppId(appId);
+        config.setAppId(cryptographicAppId);
         config.setToken(TOKEN);
         config.setAesKey(AES_KEY);
         WxCryptUtil.EncryptContext context =
                 new WxMpCryptUtil(config).encryptContext(plaintext);
         return new EncryptedRequest(
-                encryptedEnvelope(appId, outerOriginalId, context.getEncrypt()),
+                includeEnvelopeAppId
+                        ? encryptedEnvelope(
+                                cryptographicAppId, outerOriginalId, context.getEncrypt())
+                        : encryptedEnvelopeWithoutAppId(
+                                outerOriginalId, context.getEncrypt()),
                 context.getSignature(),
                 context.getTimeStamp(),
                 context.getNonce());
@@ -504,6 +551,16 @@ class WechatCallbackControllerTest {
                   <Encrypt><![CDATA[%s]]></Encrypt>
                 </xml>
                 """.formatted(originalId, appId, ciphertext);
+    }
+
+    private static String encryptedEnvelopeWithoutAppId(
+            String originalId, String ciphertext) {
+        return """
+                <xml>
+                  <ToUserName><![CDATA[%s]]></ToUserName>
+                  <Encrypt><![CDATA[%s]]></Encrypt>
+                </xml>
+                """.formatted(originalId, ciphertext);
     }
 
     private static String fixture(String name) throws IOException {

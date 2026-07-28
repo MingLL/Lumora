@@ -1,6 +1,7 @@
 package cn.minglli.lumora.wechat;
 
 import java.io.ByteArrayInputStream;
+import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashMap;
@@ -22,6 +23,12 @@ import org.xml.sax.SAXParseException;
 @Component
 public final class SafeXmlParser {
 
+    /** Maximum accepted nesting of XML elements, including the root element. */
+    public static final int MAX_ELEMENT_DEPTH = 32;
+
+    /** Maximum accepted total DOM nodes, including elements and text nodes. */
+    public static final int MAX_NODE_COUNT = 4_096;
+
     private static final String DISALLOW_DOCTYPE =
             "http://apache.org/xml/features/disallow-doctype-decl";
     private static final String EXTERNAL_GENERAL_ENTITIES =
@@ -38,7 +45,10 @@ public final class SafeXmlParser {
             builder.setErrorHandler(THROWING_ERROR_HANDLER);
             Document document = builder.parse(new ByteArrayInputStream(xml));
             Element root = document.getDocumentElement();
+            validateComplexity(root);
             return new ParsedXml(root.getTagName(), fields(root));
+        } catch (WechatMalformedXmlException exception) {
+            throw exception;
         } catch (SAXException | RuntimeException exception) {
             throw new WechatMalformedXmlException("Malformed WeChat XML", exception);
         } catch (Exception exception) {
@@ -77,6 +87,36 @@ public final class SafeXmlParser {
             throw exception;
         }
     };
+
+    private static void validateComplexity(Element root) {
+        ArrayDeque<NodeDepth> pending = new ArrayDeque<>();
+        pending.push(new NodeDepth(root, 1));
+        int nodeCount = 0;
+        while (!pending.isEmpty()) {
+            NodeDepth current = pending.pop();
+            nodeCount++;
+            if (nodeCount > MAX_NODE_COUNT) {
+                throw complexityException("WeChat XML node limit exceeded");
+            }
+            if (current.node() instanceof Element
+                    && current.elementDepth() > MAX_ELEMENT_DEPTH) {
+                throw complexityException("WeChat XML depth limit exceeded");
+            }
+
+            NodeList children = current.node().getChildNodes();
+            for (int index = 0; index < children.getLength(); index++) {
+                Node child = children.item(index);
+                int childDepth = current.elementDepth()
+                        + (child instanceof Element ? 1 : 0);
+                pending.push(new NodeDepth(child, childDepth));
+            }
+        }
+    }
+
+    private static WechatMalformedXmlException complexityException(String message) {
+        return new WechatMalformedXmlException(
+                message, new IllegalArgumentException("XML complexity limit"));
+    }
 
     private static Map<String, Object> fields(Element parent) {
         Map<String, Object> result = new LinkedHashMap<>();
@@ -146,4 +186,6 @@ public final class SafeXmlParser {
             return value instanceof Map<?, ?> ? (Map<String, Object>) value : Map.of();
         }
     }
+
+    private record NodeDepth(Node node, int elementDepth) {}
 }

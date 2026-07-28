@@ -50,6 +50,35 @@ class SafeXmlParserTest {
                 .isInstanceOf(WechatMalformedXmlException.class);
     }
 
+    @Test
+    void rejectsXmlDeeperThanExplicitLimitWithoutStackOverflow() {
+        StringBuilder xml = new StringBuilder("<xml>");
+        for (int depth = 1; depth <= SafeXmlParser.MAX_ELEMENT_DEPTH; depth++) {
+            xml.append("<node>");
+        }
+        xml.append("<tooDeep/>");
+        for (int depth = 1; depth <= SafeXmlParser.MAX_ELEMENT_DEPTH; depth++) {
+            xml.append("</node>");
+        }
+        xml.append("</xml>");
+
+        assertThatThrownBy(() -> parser.parse(bytes(xml.toString())))
+                .isInstanceOf(WechatMalformedXmlException.class)
+                .isNotInstanceOf(StackOverflowError.class);
+    }
+
+    @Test
+    void rejectsNodeFloodBeyondExplicitLimit() {
+        StringBuilder xml = new StringBuilder("<xml>");
+        for (int node = 0; node < SafeXmlParser.MAX_NODE_COUNT; node++) {
+            xml.append("<n/>");
+        }
+        xml.append("</xml>");
+
+        assertThatThrownBy(() -> parser.parse(bytes(xml.toString())))
+                .isInstanceOf(WechatMalformedXmlException.class);
+    }
+
     private static byte[] bytes(String xml) {
         return xml.getBytes(StandardCharsets.UTF_8);
     }
