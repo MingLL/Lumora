@@ -222,7 +222,7 @@ POST /internal/reports/{date}/send
 至少使用以下环境变量：
 
 - `WECHAT_APP_ID`
-- `WECHAT_SECRET`
+- `WECHAT_ORIGINAL_ID`
 - `WECHAT_TOKEN`
 - `WECHAT_AES_KEY`
 - `MYSQL_HOST`
@@ -338,8 +338,9 @@ FurtherWarmth 的历史源码中存在硬编码的 OpenAI API Key。Lumora 不�
 6. 原始 EventKey
 7. Ticket
 8. 纬度、经度和精度的规范十进制字符串
+9. 复合菜单字段的隐私安全指纹
 
-对序列化结果计算 SHA-256，存为 `sha256:<64位小写十六进制>`；数据库列为 `varchar(71)`，并与 AppID 组成唯一索引。
+复合菜单字段不直接进入主序列化串。实现先对 `ScanCodeInfo`、`SendPicsInfo` 或 `SendLocationInfo` 的完整规范化字段计算 SHA-256，只把字段类型、条目数量和该 SHA-256 加入主序列化串；原始复合字段不落库。对最终序列化结果计算 SHA-256，存为 `sha256:<64位小写十六进制>`；数据库列为 `varchar(71)`，并与 AppID 组成唯一索引。
 
 微信事件通常没有消息 ID，且 CreateTime 仅精确到秒。因此，同一用户在同一秒内产生字段完全相同的两个真实事件时无法和重试区分，系统会合并为一次，日报可能少计。这是上游载荷限制。不能加入接收时间规避，否则微信重试会被重复统计。
 
@@ -403,15 +404,15 @@ v1 的 `MENU_OTHER` 只包含下列微信 Event 值：
 
 这些事件统一统计为 `MENU_OTHER`，同时按原始 Event 和 EventKey 展示明细。所列可选复合字段第一版只保存类型标识和条目数量，不保存图片 URL、扫码结果或选择的精确位置。其他 `MsgType=event` 回调保存为 `UNKNOWN`。普通 `text`、`image`、`voice`、`video` 等非事件消息不进入事件库、不计入日报，并直接返回 `success`。
 
-无论 GET、明文 POST 还是安全模式 POST，请求路径 `{appId}` 必须先与唯一配置的 `WECHAT_APP_ID` 完全相同，否则返回 404 且不继续处理。明文和解密后的 POST 还必须校验 `ToUserName` 等所有可用的接收方身份字段与该公众号配置相符；加密信封存在可验证接收方字段时也一并验证。测试分别覆盖 GET、明文 POST、加密 POST 的路径 AppID 不匹配，以及消息内接收方不匹配。
+无论 GET、明文 POST 还是安全模式 POST，请求路径 `{appId}` 必须先与唯一配置的 `WECHAT_APP_ID` 完全相同，否则返回 404 且不继续处理。明文和解密后消息中的 `ToUserName` 是公众号原始 ID，必须与必填配置 `WECHAT_ORIGINAL_ID` 相同；加密信封中的 AppID 必须与 `WECHAT_APP_ID` 相同。测试分别覆盖 GET、明文 POST、加密 POST 的路径 AppID 不匹配、消息公众号原始 ID 不匹配和加密信封 AppID 不匹配。
 
 ### 创建并发规则
 
 创建昨日快照使用数据库事务和唯一约束 `unique(report_date, version)`。自动任务只能创建 `version=1`；并发插入冲突的一方重新读取已提交快照，不重新计算或覆盖。
 
-自动投递记录使用唯一约束 `unique(report_id, trigger_type)`，其中自动触发的 `trigger_type=AUTO`，保证每个报告版本只有一个自动投递。调度实例在同一事务内执行“读取或插入投递记录并条件认领”；唯一键冲突时重新读取，再参与租约认领。
+自动投递记录包含仅在 `trigger_type=AUTO` 时等于 `report_id`、否则为 null 的生成列 `auto_report_id`，并对该列建立唯一索引。MySQL 唯一索引允许多个 null，因此每个报告版本只有一个自动投递，同时允许多个手动投递。调度实例在同一事务内执行“读取或插入投递记录并条件认领”；唯一键冲突时重新读取，再参与租约认领。
 
-每次手动请求使用客户端必须提供的 `X-Request-Id` 作为幂等键，并建立 `unique(report_id, trigger_type, request_id)`。同一请求 ID 返回已有结果。针对同一报告版本，已有 `SENDING` 投递时，新的不同请求返回 409，不合并也不并发发送；`force` 仅允许在没有活动投递时绕过已有 `SENT` 检查。测试覆盖并发创建快照、自动投递创建冲突、重复手动请求和活动投递冲突。
+每次手动请求使用客户端必须提供的 `X-Request-Id` 作为幂等键，并建立 `unique(report_id, request_id)`；自动记录的 `request_id` 为 null。同一请求 ID 返回已有结果。针对同一报告版本，已有 `SENDING` 投递时，新的不同请求返回 409，不合并也不并发发送；`force` 仅允许在没有活动投递时绕过已有 `SENT` 检查。测试覆盖并发创建快照、自动投递创建冲突、重复手动请求和活动投递冲突。
 
 ### 敏感数据生命周期
 
