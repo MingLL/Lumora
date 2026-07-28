@@ -74,9 +74,14 @@ public final class EventDeduplicationKey {
         if (composite == null) {
             return Optional.empty();
         }
-        String hash = sha256Hex(canonicalBytes(composite.items()));
+        Object normalizedContent = composite.declaredItemCount() == null
+                ? composite.items()
+                : Map.of(
+                        "Count", composite.declaredItemCount(),
+                        "PicList", Map.of("item", composite.items()));
+        String hash = sha256Hex(canonicalBytes(normalizedContent));
         return Optional.of(new CompositeFingerprint(
-                composite.type(), composite.items().size(), hash));
+                composite.type(), composite.itemCount(), hash));
     }
 
     static String canonicalLatitude(BigDecimal value) {

@@ -125,6 +125,10 @@ public final class WechatProtocolService {
         try {
             long createTime = requiredLong(xml, "CreateTime");
             Instant.ofEpochSecond(createTime);
+            BigDecimal latitude = optionalDecimal(xml.text("Latitude"));
+            BigDecimal longitude = optionalDecimal(xml.text("Longitude"));
+            BigDecimal precision = optionalDecimal(xml.text("Precision"));
+            validateCoordinates(latitude, longitude, precision);
             return WechatInboundMessage.builder()
                     .appId(appId)
                     .openId(requiredText(xml, "FromUserName"))
@@ -134,14 +138,26 @@ public final class WechatProtocolService {
                     .msgId(optionalLong(xml.text("MsgId")))
                     .eventKey(xml.text("EventKey"))
                     .ticket(xml.text("Ticket"))
-                    .latitude(optionalDecimal(xml.text("Latitude")))
-                    .longitude(optionalDecimal(xml.text("Longitude")))
-                    .locationPrecision(optionalDecimal(xml.text("Precision")))
+                    .latitude(latitude)
+                    .longitude(longitude)
+                    .locationPrecision(precision)
                     .composite(composite(xml))
                     .payload(xml.fields())
                     .build();
         } catch (NumberFormatException | DateTimeException exception) {
             throw new WechatMalformedXmlException("Invalid WeChat numeric field", exception);
+        }
+    }
+
+    private static void validateCoordinates(
+            BigDecimal latitude, BigDecimal longitude, BigDecimal precision) {
+        try {
+            EventDeduplicationKey.canonicalLatitude(latitude);
+            EventDeduplicationKey.canonicalLongitude(longitude);
+            EventDeduplicationKey.canonicalPrecision(precision);
+        } catch (IllegalArgumentException exception) {
+            throw new WechatInvalidPayloadException(
+                    "Invalid WeChat coordinate field", exception);
         }
     }
 
@@ -155,8 +171,9 @@ public final class WechatProtocolService {
 
         Map<String, Object> sendPics = xml.object("SendPicsInfo");
         if (!sendPics.isEmpty()) {
+            List<Map<String, Object>> items = pictureItems(sendPics);
             return new WechatInboundMessage.CompositePayload(
-                    "SendPicsInfo", pictureItems(sendPics));
+                    "SendPicsInfo", pictureCount(sendPics, items.size()), items);
         }
 
         Map<String, Object> sendLocation = xml.object("SendLocationInfo");
@@ -184,6 +201,20 @@ public final class WechatProtocolService {
             }
         }
         return List.copyOf(items);
+    }
+
+    private static int pictureCount(Map<String, Object> sendPics, int defaultCount) {
+        Object count = sendPics.get("Count");
+        if (!(count instanceof String text) || text.isBlank()) {
+            return defaultCount;
+        }
+        int parsed = Integer.parseInt(text.trim());
+        if (parsed < 0) {
+            throw new WechatInvalidPayloadException(
+                    "Invalid WeChat picture count",
+                    new IllegalArgumentException("Count"));
+        }
+        return parsed;
     }
 
     private static Map<String, Object> stringKeyMap(Map<?, ?> source) {

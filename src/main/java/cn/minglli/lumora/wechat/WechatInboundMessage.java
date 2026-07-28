@@ -194,10 +194,22 @@ public final class WechatInboundMessage {
     public static final class CompositePayload {
 
         private final String type;
+        private final Integer declaredItemCount;
         private final List<Map<String, Object>> items;
 
         public CompositePayload(String type, List<? extends Map<String, ?>> items) {
+            this(type, null, items);
+        }
+
+        public CompositePayload(
+                String type,
+                Integer declaredItemCount,
+                List<? extends Map<String, ?>> items) {
+            if (declaredItemCount != null && declaredItemCount < 0) {
+                throw new IllegalArgumentException("Composite item count must not be negative");
+            }
             this.type = type;
+            this.declaredItemCount = declaredItemCount;
             this.items = immutableItems(items);
         }
 
@@ -209,6 +221,14 @@ public final class WechatInboundMessage {
             return items;
         }
 
+        public Integer declaredItemCount() {
+            return declaredItemCount;
+        }
+
+        public int itemCount() {
+            return declaredItemCount == null ? items.size() : declaredItemCount;
+        }
+
         @Override
         public boolean equals(Object other) {
             if (this == other) {
@@ -216,12 +236,13 @@ public final class WechatInboundMessage {
             }
             return other instanceof CompositePayload that
                     && Objects.equals(type, that.type)
+                    && Objects.equals(declaredItemCount, that.declaredItemCount)
                     && items.equals(that.items);
         }
 
         @Override
         public int hashCode() {
-            return Objects.hash(type, items);
+            return Objects.hash(type, declaredItemCount, items);
         }
 
         private static List<Map<String, Object>> immutableItems(

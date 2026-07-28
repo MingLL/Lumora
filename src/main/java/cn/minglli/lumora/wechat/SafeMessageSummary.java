@@ -45,6 +45,9 @@ public final class SafeMessageSummary {
         } else {
             Map<String, Object> composite = new LinkedHashMap<>();
             composite.put("Type", message.composite().type());
+            if (message.composite().declaredItemCount() != null) {
+                composite.put("Count", message.composite().declaredItemCount());
+            }
             composite.put("Items", message.composite().items());
             normalized.put("Composite", composite);
         }

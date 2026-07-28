@@ -12,6 +12,8 @@ import java.nio.charset.StandardCharsets;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.stream.Stream;
 
 import cn.minglli.lumora.config.LumoraProperties;
@@ -28,6 +30,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.dao.DataAccessResourceFailureException;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
@@ -124,6 +127,7 @@ class WechatCallbackControllerTest {
     static Stream<Arguments> eventFixtures() {
         return Stream.of(
                 Arguments.of("subscribe.xml", EventType.SUBSCRIBE, null),
+                Arguments.of("unsubscribe.xml", EventType.UNSUBSCRIBE, null),
                 Arguments.of("qr-subscribe.xml", EventType.SUBSCRIBE, null),
                 Arguments.of("scan.xml", EventType.SCAN, null),
                 Arguments.of("location.xml", EventType.LOCATION, null),
@@ -135,7 +139,28 @@ class WechatCallbackControllerTest {
                 Arguments.of("pic-photo-or-album.xml", EventType.MENU_OTHER, "SendPicsInfo"),
                 Arguments.of("pic-weixin.xml", EventType.MENU_OTHER, "SendPicsInfo"),
                 Arguments.of("location-select.xml", EventType.MENU_OTHER, "SendLocationInfo"),
-                Arguments.of("unknown.xml", EventType.UNKNOWN, null));
+                Arguments.of("unknown-event.xml", EventType.UNKNOWN, null));
+    }
+
+    @Test
+    void sendPicsCountParticipatesInFingerprintAndPersistedMetadata() throws Exception {
+        String onePicture = fixture("pic-sysphoto.xml");
+        String twoDeclaredPictures = onePicture.replace("<Count>1</Count>", "<Count>2</Count>");
+
+        mockMvc.perform(plainPost(APP_ID, onePicture, signature()))
+                .andExpect(status().isOk());
+        mockMvc.perform(plainPost(APP_ID, twoDeclaredPictures, signature()))
+                .andExpect(status().isOk());
+
+        assertThat(repository.events).hasSize(2);
+        WechatEvent first = repository.events.get(0);
+        WechatEvent second = repository.events.get(1);
+        assertThat(first.compositeItemCount()).isEqualTo(1);
+        assertThat(second.compositeItemCount()).isEqualTo(2);
+        assertThat(first.compositeSha256()).isNotEqualTo(second.compositeSha256());
+        assertThat(first.deduplicationKey()).isNotEqualTo(second.deduplicationKey());
+        assertThat(first.normalizedMessageSha256())
+                .isNotEqualTo(second.normalizedMessageSha256());
     }
 
     @Test
@@ -188,6 +213,18 @@ class WechatCallbackControllerTest {
         assertThat(repository.calls).isZero();
     }
 
+    @ParameterizedTest
+    @ValueSource(strings = {"91.0000000", "31.12345678"})
+    void rejectsInvalidCoordinateRangeOrScaleWithoutPersistence(String latitude)
+            throws Exception {
+        String body = fixture("location.xml").replace("31.2304000", latitude);
+
+        mockMvc.perform(plainPost(APP_ID, body, signature()))
+                .andExpect(status().isBadRequest());
+
+        assertThat(repository.calls).isZero();
+    }
+
     @Test
     void rejectsBodyLargerThan256KiBBeforeParsing() throws Exception {
         byte[] oversized = new byte[WechatCallbackController.MAX_REQUEST_BODY_BYTES + 1];
@@ -205,7 +242,7 @@ class WechatCallbackControllerTest {
 
     @Test
     void ordinaryMessageReturnsSuccessWithoutInsert() throws Exception {
-        mockMvc.perform(plainPost(APP_ID, fixture("text.xml"), signature()))
+        mockMvc.perform(plainPost(APP_ID, fixture("text-message.xml"), signature()))
                 .andExpect(status().isOk())
                 .andExpect(content().string("success"));
 
@@ -240,6 +277,89 @@ class WechatCallbackControllerTest {
 
         assertThat(repository.calls).isOne();
         assertThat(repository.event.eventType()).isEqualTo(EventType.SUBSCRIBE);
+    }
+
+    @Test
+    void encryptedMalformedXmlReturnsBadRequestWithoutPersistence() throws Exception {
+        EncryptedRequest encrypted = encrypt(
+                "<xml><Event>subscribe</xml>", APP_ID, ORIGINAL_ID);
+
+        mockMvc.perform(encryptedPost(APP_ID, encrypted))
+                .andExpect(status().isBadRequest());
+
+        assertThat(repository.calls).isZero();
+    }
+
+    @Test
+    void encryptedXxeReturnsBadRequestWithoutPersistence() throws Exception {
+        EncryptedRequest encrypted = encrypt("""
+                <!DOCTYPE xml [<!ENTITY xxe SYSTEM "file:///etc/passwd">]>
+                <xml>
+                  <ToUserName>&xxe;</ToUserName>
+                  <FromUserName>openid-private</FromUserName>
+                  <CreateTime>1785240000</CreateTime>
+                  <MsgType>event</MsgType>
+                  <Event>subscribe</Event>
+                </xml>
+                """, APP_ID, ORIGINAL_ID);
+
+        mockMvc.perform(encryptedPost(APP_ID, encrypted))
+                .andExpect(status().isBadRequest());
+
+        assertThat(repository.calls).isZero();
+    }
+
+    @Test
+    void encryptedOversizedBodyReturnsPayloadTooLarge() throws Exception {
+        byte[] oversized = new byte[WechatCallbackController.MAX_REQUEST_BODY_BYTES + 1];
+
+        mockMvc.perform(post(PATH)
+                        .queryParam("encrypt_type", "aes")
+                        .queryParam("msg_signature", "irrelevant")
+                        .queryParam("timestamp", TIMESTAMP)
+                        .queryParam("nonce", NONCE)
+                        .contentType(MediaType.APPLICATION_XML)
+                        .content(oversized))
+                .andExpect(status().isPayloadTooLarge());
+
+        assertThat(repository.calls).isZero();
+    }
+
+    @Test
+    void encryptedOrdinaryMessageReturnsSuccessWithoutInsert() throws Exception {
+        EncryptedRequest encrypted = encrypt(
+                fixture("text-message.xml"), APP_ID, ORIGINAL_ID);
+
+        mockMvc.perform(encryptedPost(APP_ID, encrypted))
+                .andExpect(status().isOk())
+                .andExpect(content().string("success"));
+
+        assertThat(repository.calls).isZero();
+    }
+
+    @Test
+    void encryptedDuplicateReturnsSuccess() throws Exception {
+        repository.result = WechatEventRepository.InsertResult.DUPLICATE;
+        EncryptedRequest encrypted = encrypt(
+                fixture("subscribe.xml"), APP_ID, ORIGINAL_ID);
+
+        mockMvc.perform(encryptedPost(APP_ID, encrypted))
+                .andExpect(status().isOk())
+                .andExpect(content().string("success"));
+
+        assertThat(repository.calls).isOne();
+    }
+
+    @Test
+    void encryptedDatabaseFailureReturnsServiceUnavailable() throws Exception {
+        repository.failure = new DataAccessResourceFailureException("database unavailable");
+        EncryptedRequest encrypted = encrypt(
+                fixture("subscribe.xml"), APP_ID, ORIGINAL_ID);
+
+        mockMvc.perform(encryptedPost(APP_ID, encrypted))
+                .andExpect(status().isServiceUnavailable());
+
+        assertThat(repository.calls).isOne();
     }
 
     @Test
@@ -403,6 +523,7 @@ class WechatCallbackControllerTest {
 
         private WechatEventRepository.InsertResult result =
                 WechatEventRepository.InsertResult.INSERTED;
+        private final List<WechatEvent> events = new ArrayList<>();
         private WechatEvent event;
         private int calls;
         private RuntimeException failure;
@@ -418,6 +539,7 @@ class WechatCallbackControllerTest {
                 throw failure;
             }
             this.event = event;
+            events.add(event);
             return result;
         }
     }

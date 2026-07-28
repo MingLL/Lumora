@@ -18,6 +18,11 @@ public final class WechatCallbackExceptionHandler {
         return ResponseEntity.badRequest().build();
     }
 
+    @ExceptionHandler(WechatInvalidPayloadException.class)
+    public ResponseEntity<Void> handleInvalidPayload(WechatInvalidPayloadException exception) {
+        return ResponseEntity.badRequest().build();
+    }
+
     @ExceptionHandler(DataAccessException.class)
     public ResponseEntity<Void> handleDatabaseFailure(DataAccessException exception) {
         return ResponseEntity.status(503).build();
