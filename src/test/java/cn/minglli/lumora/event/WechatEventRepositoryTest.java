@@ -118,17 +118,17 @@ class WechatEventRepositoryTest extends MySqlContainerTest {
     void createsRequiredIndexesGeneratedColumnAndForeignKey() {
         assertThat(indexes("wechat_event")).containsExactlyInAnyOrderEntriesOf(mapOf(
                 "PRIMARY", "UNIQUE:id",
-                "uq_wechat_event_app_deduplication", "UNIQUE:app_id,deduplication_key",
-                "idx_wechat_event_effective_type", "NONUNIQUE:effective_occurred_at,event_type",
-                "idx_wechat_event_open_effective", "NONUNIQUE:open_id,effective_occurred_at"));
+                "uq_event_dedup", "UNIQUE:app_id,deduplication_key",
+                "ix_event_report", "NONUNIQUE:effective_occurred_at,event_type",
+                "ix_event_user", "NONUNIQUE:open_id,effective_occurred_at"));
         assertThat(indexes("daily_report")).containsExactlyInAnyOrderEntriesOf(mapOf(
                 "PRIMARY", "UNIQUE:id",
-                "uq_daily_report_date_version", "UNIQUE:report_date,version"));
-        assertThat(indexes("report_delivery_attempt")).containsAllEntriesOf(mapOf(
+                "uq_report_version", "UNIQUE:report_date,version"));
+        assertThat(indexes("report_delivery_attempt")).containsExactlyInAnyOrderEntriesOf(mapOf(
                 "PRIMARY", "UNIQUE:id",
-                "uq_delivery_attempt_delivery_id", "UNIQUE:delivery_id",
-                "uq_delivery_attempt_auto_report", "UNIQUE:auto_report_id",
-                "uq_delivery_attempt_report_request", "UNIQUE:report_id,request_id"));
+                "uq_delivery_id", "UNIQUE:delivery_id",
+                "uq_auto_report", "UNIQUE:auto_report_id",
+                "uq_manual_request", "UNIQUE:report_id,request_id"));
 
         Map<String, Object> generatedColumn = jdbcTemplate.queryForMap("""
                 SELECT generation_expression, extra
@@ -142,13 +142,15 @@ class WechatEventRepositoryTest extends MySqlContainerTest {
         assertThat(generatedColumn.get("extra")).isEqualTo("STORED GENERATED");
 
         Map<String, Object> foreignKey = jdbcTemplate.queryForMap("""
-                SELECT column_name, referenced_table_name, referenced_column_name
+                SELECT constraint_name, column_name,
+                       referenced_table_name, referenced_column_name
                 FROM information_schema.key_column_usage
                 WHERE table_schema = DATABASE()
                   AND table_name = 'report_delivery_attempt'
                   AND referenced_table_name IS NOT NULL
                 """);
-        assertThat(foreignKey).containsEntry("column_name", "report_id")
+        assertThat(foreignKey).containsEntry("constraint_name", "fk_delivery_report")
+                .containsEntry("column_name", "report_id")
                 .containsEntry("referenced_table_name", "daily_report")
                 .containsEntry("referenced_column_name", "id");
     }

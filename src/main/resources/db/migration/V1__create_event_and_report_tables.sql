@@ -27,10 +27,10 @@ CREATE TABLE wechat_event (
     normalized_message_sha256 CHAR(64) NOT NULL,
     created_at TIMESTAMP(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
     PRIMARY KEY (id),
-    CONSTRAINT uq_wechat_event_app_deduplication
+    CONSTRAINT uq_event_dedup
         UNIQUE (app_id, deduplication_key),
-    INDEX idx_wechat_event_effective_type (effective_occurred_at, event_type),
-    INDEX idx_wechat_event_open_effective (open_id, effective_occurred_at)
+    INDEX ix_event_report (effective_occurred_at, event_type),
+    INDEX ix_event_user (open_id, effective_occurred_at)
 ) ENGINE = InnoDB
   DEFAULT CHARACTER SET = utf8mb4;
 
@@ -44,7 +44,7 @@ CREATE TABLE daily_report (
     snapshot_json JSON NOT NULL,
     created_at TIMESTAMP(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
     PRIMARY KEY (id),
-    CONSTRAINT uq_daily_report_date_version UNIQUE (report_date, version)
+    CONSTRAINT uq_report_version UNIQUE (report_date, version)
 ) ENGINE = InnoDB
   DEFAULT CHARACTER SET = utf8mb4;
 
@@ -71,10 +71,10 @@ CREATE TABLE report_delivery_attempt (
     updated_at TIMESTAMP(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6)
         ON UPDATE CURRENT_TIMESTAMP(6),
     PRIMARY KEY (id),
-    CONSTRAINT uq_delivery_attempt_delivery_id UNIQUE (delivery_id),
-    CONSTRAINT uq_delivery_attempt_auto_report UNIQUE (auto_report_id),
-    CONSTRAINT uq_delivery_attempt_report_request UNIQUE (report_id, request_id),
-    CONSTRAINT fk_delivery_attempt_report
+    CONSTRAINT uq_delivery_id UNIQUE (delivery_id),
+    CONSTRAINT uq_auto_report UNIQUE (auto_report_id),
+    CONSTRAINT uq_manual_request UNIQUE (report_id, request_id),
+    CONSTRAINT fk_delivery_report
         FOREIGN KEY (report_id) REFERENCES daily_report (id)
 ) ENGINE = InnoDB
   DEFAULT CHARACTER SET = utf8mb4;
