@@ -1,0 +1,10 @@
+<xml>
+  <ToUserName><![CDATA[gh_test_original]]></ToUserName>
+  <FromUserName><![CDATA[openid-private]]></FromUserName>
+  <CreateTime>1785240000</CreateTime>
+  <MsgType><![CDATA[event]]></MsgType>
+  <Event><![CDATA[LOCATION]]></Event>
+  <Latitude>31.2304000</Latitude>
+  <Longitude>121.4737000</Longitude>
+  <Precision>12.500000</Precision>
+</xml>

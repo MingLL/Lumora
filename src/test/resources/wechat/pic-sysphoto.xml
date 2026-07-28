@@ -1,0 +1,9 @@
+<xml>
+  <ToUserName><![CDATA[gh_test_original]]></ToUserName>
+  <FromUserName><![CDATA[openid-private]]></FromUserName>
+  <CreateTime>1785240000</CreateTime>
+  <MsgType><![CDATA[event]]></MsgType>
+  <Event><![CDATA[pic_sysphoto]]></Event>
+  <EventKey><![CDATA[MENU_PHOTO]]></EventKey>
+  <SendPicsInfo><Count>1</Count><PicList><item><PicMd5Sum>private-md5</PicMd5Sum></item></PicList></SendPicsInfo>
+</xml>

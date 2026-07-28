@@ -1,0 +1,9 @@
+<xml>
+  <ToUserName><![CDATA[gh_test_original]]></ToUserName>
+  <FromUserName><![CDATA[openid-private]]></FromUserName>
+  <CreateTime>1785240000</CreateTime>
+  <MsgType><![CDATA[event]]></MsgType>
+  <Event><![CDATA[subscribe]]></Event>
+  <EventKey><![CDATA[qrscene_campaign-42]]></EventKey>
+  <Ticket><![CDATA[ticket-private]]></Ticket>
+</xml>

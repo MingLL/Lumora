@@ -1,0 +1,7 @@
+<xml>
+  <ToUserName><![CDATA[gh_test_original]]></ToUserName>
+  <FromUserName><![CDATA[openid-private]]></FromUserName>
+  <CreateTime>1785240000</CreateTime>
+  <MsgType><![CDATA[event]]></MsgType>
+  <Event><![CDATA[future_wechat_event]]></Event>
+</xml>

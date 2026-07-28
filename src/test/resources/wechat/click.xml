@@ -1,0 +1,8 @@
+<xml>
+  <ToUserName><![CDATA[gh_test_original]]></ToUserName>
+  <FromUserName><![CDATA[openid-private]]></FromUserName>
+  <CreateTime>1785240000</CreateTime>
+  <MsgType><![CDATA[event]]></MsgType>
+  <Event><![CDATA[CLICK]]></Event>
+  <EventKey><![CDATA[MENU_REPORT]]></EventKey>
+</xml>
