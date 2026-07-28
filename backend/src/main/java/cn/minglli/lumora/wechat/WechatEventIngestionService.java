@@ -9,12 +9,16 @@ import cn.minglli.lumora.event.WechatEvent;
 import cn.minglli.lumora.event.WechatEventRepository;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
 @Service
 public final class WechatEventIngestionService {
 
     private static final Duration MAX_TIMESTAMP_SKEW = Duration.ofDays(30);
+
+    private static final Logger log = LoggerFactory.getLogger(WechatEventIngestionService.class);
 
     private final WechatEventRepository repository;
     private final Clock clock;
@@ -38,6 +42,7 @@ public final class WechatEventIngestionService {
     public IngestionResult ingest(WechatInboundMessage message) {
         WechatEventNormalizer.NormalizationResult result = normalizer.normalize(message);
         if (result.outcome() == WechatEventNormalizer.Outcome.IGNORED) {
+            log.debug("Ignored non-event WeChat message msgType={}", message.msgType());
             return IngestionResult.IGNORED;
         }
 
@@ -51,9 +56,13 @@ public final class WechatEventIngestionService {
 
         if (anomalous) {
             anomalousTimestampCounter.increment();
+            log.warn("Anomalous WeChat CreateTime, archiving by receipt time eventType={} rawEvent={}",
+                    normalized.eventType(), normalized.rawEvent());
         }
         if (normalized.eventType() == EventType.UNKNOWN) {
             unknownEventCounter.increment();
+            log.warn("Unrecognised WeChat event stored as UNKNOWN msgType={} rawEvent={}",
+                    normalized.rawMsgType(), normalized.rawEvent());
         }
 
         WechatEvent event = new WechatEvent(
@@ -85,10 +94,13 @@ public final class WechatEventIngestionService {
                 normalized.normalizedMessageSha256(),
                 null);
 
-        return switch (repository.insert(event)) {
+        IngestionResult outcome = switch (repository.insert(event)) {
             case INSERTED -> IngestionResult.INSERTED;
             case DUPLICATE -> IngestionResult.DUPLICATE;
         };
+        log.info("Ingested WeChat event eventType={} rawEvent={} result={} anomalousTimestamp={}",
+                normalized.eventType(), normalized.rawEvent(), outcome, anomalous);
+        return outcome;
     }
 
     private static long requiredCreateTime(Long createTime) {

@@ -53,3 +53,4 @@ lumora:
   report-recovery-enabled: ${REPORT_RECOVERY_ENABLED:true}
   retention-enabled: ${RETENTION_ENABLED:true}
   internal-send-enabled: ${INTERNAL_SEND_ENABLED:true}
+  worker-ready-marker: ${WORKER_READY_MARKER:/tmp/lumora-worker-ready}

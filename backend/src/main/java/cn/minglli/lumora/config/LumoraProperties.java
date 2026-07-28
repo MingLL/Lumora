@@ -75,6 +75,9 @@ public class LumoraProperties {
 
     private boolean internalSendEnabled = true;
 
+    @NotBlank(message = "WORKER_READY_MARKER must not be blank")
+    private String workerReadyMarker = "/tmp/lumora-worker-ready";
+
     public String getWechatAppId() {
         return wechatAppId;
     }
@@ -225,5 +228,13 @@ public class LumoraProperties {
 
     public void setInternalSendEnabled(boolean internalSendEnabled) {
         this.internalSendEnabled = internalSendEnabled;
+    }
+
+    public String getWorkerReadyMarker() {
+        return workerReadyMarker;
+    }
+
+    public void setWorkerReadyMarker(String workerReadyMarker) {
+        this.workerReadyMarker = workerReadyMarker;
     }
 }
