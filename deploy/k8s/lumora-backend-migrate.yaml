@@ -1,0 +1,45 @@
+# 一次性迁移 Job。
+#
+# 应用容器永远不隐式迁移（application.yml 里 spring.flyway.enabled=false），
+# 迁移只由这个 Job 执行，且必须在 apply 应用清单之前跑完。
+#
+# 迁移是 expand-only 的：一次发布只新增可空列、新表或兼容索引，不删除、不重命名、
+# 不改变既有字段语义。这样旧版本和候选版本能同时跑在迁移后的库上，发布失败可以回滚。
+#
+# name 带 __IMAGE_TAG__ 后缀：Job 的 spec 不可变，同名重跑会失败；
+# 按版本命名让每次发布是一个独立的 Job，也留下了迁移历史。
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: lumora-migrate-__IMAGE_TAG__
+  namespace: lumora
+  labels:
+    app: lumora-backend
+    role: migrate
+spec:
+  backoffLimit: 0        # 迁移失败就停下来让人看，不要反复重试
+  ttlSecondsAfterFinished: 604800
+  template:
+    metadata:
+      labels:
+        app: lumora-backend
+        role: migrate
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: migrate
+          image: __IMAGE__
+          imagePullPolicy: IfNotPresent
+          envFrom:
+            - secretRef:
+                name: lumora-env
+          env:
+            - name: LUMORA_MODE
+              value: "migrate"
+          resources:
+            requests:
+              cpu: 50m
+              memory: 256Mi
+            limits:
+              cpu: "1"
+              memory: 512Mi

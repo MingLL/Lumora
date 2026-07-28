@@ -1,0 +1,274 @@
+# 微信公众号后端服务 —— k3s 部署清单
+#
+# 同一个镜像跑四种角色，靠环境变量区分，互不抢工作：
+#
+#   migrate  Job          发布前一次性跑 Flyway，应用永不隐式迁移
+#   web      Deployment   只接微信回调，四个后台开关全 false
+#   worker   Deployment   唯一的调度实例，replicas 恒为 1
+#   ops      Deployment   手动补发入口，只有 ClusterIP，公网无路由
+#
+# 凭据不在本文件里。deploy/deploy-backend.sh 从服务器上的 .env 生成
+# Secret/lumora-env，本文件只引用它。
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: lumora-backend-web
+  namespace: lumora
+spec:
+  selector:
+    app: lumora-backend
+    role: web
+  ports:
+    - name: http
+      port: 8080
+      targetPort: http
+---
+# ops 只在集群内可达，故意不给 Ingress。
+apiVersion: v1
+kind: Service
+metadata:
+  name: lumora-backend-ops
+  namespace: lumora
+spec:
+  selector:
+    app: lumora-backend
+    role: ops
+  ports:
+    - name: http
+      port: 8080
+      targetPort: http
+---
+# 只把回调路径放出去。前端那条 Ingress 匹配 `/`，Traefik 按规则长度定优先级，
+# 更长的 `/wechat/callback` 先命中，所以两条 Ingress 可以共存。
+# /internal/**、/actuator/** 都不在这里，公网访问不到。
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: lumora-backend
+  namespace: lumora
+spec:
+  ingressClassName: traefik
+  rules:
+    - http:
+        paths:
+          - path: /wechat/callback
+            pathType: Prefix
+            backend:
+              service:
+                name: lumora-backend-web
+                port:
+                  number: 8080
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: lumora-backend-web
+  namespace: lumora
+  labels:
+    app: lumora-backend
+    role: web
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: lumora-backend
+      role: web
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 1
+  template:
+    metadata:
+      labels:
+        app: lumora-backend
+        role: web
+      annotations:
+        lumora/manifest-hash: "__MANIFEST_HASH__"
+    spec:
+      containers:
+        - name: lumora
+          image: __IMAGE__
+          imagePullPolicy: IfNotPresent
+          envFrom:
+            - secretRef:
+                name: lumora-env
+          env:
+            - name: LUMORA_MODE
+              value: "serve"
+            # 候选/web 实例不参与任何后台工作，也不能被驱动发信。
+            - name: SCHEDULING_ENABLED
+              value: "false"
+            - name: REPORT_RECOVERY_ENABLED
+              value: "false"
+            - name: RETENTION_ENABLED
+              value: "false"
+            - name: INTERNAL_SEND_ENABLED
+              value: "false"
+          ports:
+            - name: http
+              containerPort: 8080
+          resources:
+            requests:
+              cpu: 50m
+              memory: 384Mi
+            limits:
+              cpu: "1"
+              memory: 768Mi
+          startupProbe:
+            httpGet:
+              path: /actuator/health/liveness
+              port: http
+            periodSeconds: 5
+            failureThreshold: 24
+          readinessProbe:
+            httpGet:
+              path: /actuator/health/readiness
+              port: http
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /actuator/health/liveness
+              port: http
+            periodSeconds: 30
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: false
+            capabilities:
+              drop: ["ALL"]
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: lumora-backend-worker
+  namespace: lumora
+  labels:
+    app: lumora-backend
+    role: worker
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: lumora-backend
+      role: worker
+  strategy:
+    # Recreate，不是 RollingUpdate：先停旧的再起新的，保证任一时刻最多一个
+    # 首选调度实例。数据库租约仍是最终保障，但不该依赖它来兜住发布过程。
+    type: Recreate
+  template:
+    metadata:
+      labels:
+        app: lumora-backend
+        role: worker
+      annotations:
+        lumora/manifest-hash: "__MANIFEST_HASH__"
+    spec:
+      containers:
+        - name: lumora
+          image: __IMAGE__
+          imagePullPolicy: IfNotPresent
+          envFrom:
+            - secretRef:
+                name: lumora-env
+          env:
+            - name: LUMORA_MODE
+              value: "serve"
+            - name: SCHEDULING_ENABLED
+              value: "true"
+            - name: REPORT_RECOVERY_ENABLED
+              value: "true"
+            - name: RETENTION_ENABLED
+              value: "true"
+            # worker 不开内部发送：补发是 ops 的职责，worker 不能被外部驱动。
+            - name: INTERNAL_SEND_ENABLED
+              value: "false"
+          ports:
+            - name: http
+              containerPort: 8080
+          resources:
+            requests:
+              cpu: 50m
+              memory: 384Mi
+            limits:
+              cpu: "1"
+              memory: 768Mi
+          readinessProbe:
+            # WorkerReadinessVerifier 校验通过（模式对、数据库通、三个定时任务
+            # 都注册了）才会写这个文件。"进程起来了" 不等于 "在干活"。
+            exec:
+              command: ["test", "-f", "/tmp/lumora-worker-ready"]
+            initialDelaySeconds: 10
+            periodSeconds: 5
+            failureThreshold: 12
+          livenessProbe:
+            httpGet:
+              path: /actuator/health/liveness
+              port: http
+            initialDelaySeconds: 60
+            periodSeconds: 30
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: lumora-backend-ops
+  namespace: lumora
+  labels:
+    app: lumora-backend
+    role: ops
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: lumora-backend
+      role: ops
+  template:
+    metadata:
+      labels:
+        app: lumora-backend
+        role: ops
+      annotations:
+        lumora/manifest-hash: "__MANIFEST_HASH__"
+    spec:
+      containers:
+        - name: lumora
+          image: __IMAGE__
+          imagePullPolicy: IfNotPresent
+          envFrom:
+            - secretRef:
+                name: lumora-env
+          env:
+            - name: LUMORA_MODE
+              value: "serve"
+            - name: SCHEDULING_ENABLED
+              value: "false"
+            - name: REPORT_RECOVERY_ENABLED
+              value: "false"
+            - name: RETENTION_ENABLED
+              value: "false"
+            - name: INTERNAL_SEND_ENABLED
+              value: "true"
+          ports:
+            - name: http
+              containerPort: 8080
+          resources:
+            requests:
+              cpu: 50m
+              memory: 384Mi
+            limits:
+              cpu: "1"
+              memory: 768Mi
+          readinessProbe:
+            httpGet:
+              path: /actuator/health/readiness
+              port: http
+            initialDelaySeconds: 20
+            periodSeconds: 10
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]

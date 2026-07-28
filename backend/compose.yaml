@@ -1,0 +1,103 @@
+# Production-shaped local stack. Every value comes from .env -- nothing secret is
+# baked into this file, into build arguments, or into an image layer.
+#
+#   docker compose --profile migrate up migrate   # one-shot, run before the app
+#   docker compose up -d web worker               # then the long-running services
+#
+# MySQL is never published to the host: only the compose network reaches it.
+
+name: lumora
+
+x-app-image: &app-image
+  image: ${LUMORA_IMAGE:-lumora:local}
+  # Not required, so `compose config` can validate this file on a machine that has
+  # no production .env. Deployment supplies it; check-env.sh verifies it first.
+  env_file:
+    - path: .env
+      required: false
+  depends_on:
+    mysql:
+      condition: service_healthy
+  restart: unless-stopped
+
+services:
+
+  mysql:
+    image: mysql:8.4
+    command: --default-time-zone=+00:00
+    environment:
+      MYSQL_DATABASE: ${MYSQL_DATABASE}
+      MYSQL_USER: ${MYSQL_USERNAME}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+      MYSQL_RANDOM_ROOT_PASSWORD: "yes"
+    volumes:
+      - mysql-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 --silent"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+      start_period: 30s
+    restart: unless-stopped
+
+  # Expand-only migration. Explicitly one-shot: the application images never
+  # migrate implicitly, so a candidate can never reshape the schema on startup.
+  migrate:
+    <<: *app-image
+    profiles: ["migrate"]
+    environment:
+      LUMORA_MODE: migrate
+    restart: "no"
+
+  # Public callback container. Owns no background work and cannot be told to send.
+  web:
+    <<: *app-image
+    environment:
+      LUMORA_MODE: serve
+      SCHEDULING_ENABLED: "false"
+      REPORT_RECOVERY_ENABLED: "false"
+      RETENTION_ENABLED: "false"
+      INTERNAL_SEND_ENABLED: "false"
+    ports:
+      - "127.0.0.1:${WEB_PORT:-8080}:8080"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:8080/actuator/health/liveness || exit 1"]
+      interval: 10s
+      timeout: 3s
+      retries: 6
+      start_period: 40s
+
+  # Exactly one worker. Owns the scheduled jobs; internal sending stays off so it
+  # cannot be driven from outside.
+  worker:
+    <<: *app-image
+    environment:
+      LUMORA_MODE: serve
+      SCHEDULING_ENABLED: "true"
+      REPORT_RECOVERY_ENABLED: "true"
+      RETENTION_ENABLED: "true"
+      INTERNAL_SEND_ENABLED: "false"
+    healthcheck:
+      # Set by WorkerReadinessVerifier only after mode, database and scheduled
+      # task checks all pass -- "started" is not the same as "working".
+      test: ["CMD-SHELL", "test -f /tmp/lumora-worker-ready"]
+      interval: 5s
+      timeout: 2s
+      retries: 12
+      start_period: 40s
+
+  # Operator entry point for manual resends. Bound to loopback only; no public route.
+  ops:
+    <<: *app-image
+    profiles: ["ops"]
+    environment:
+      LUMORA_MODE: serve
+      SCHEDULING_ENABLED: "false"
+      REPORT_RECOVERY_ENABLED: "false"
+      RETENTION_ENABLED: "false"
+      INTERNAL_SEND_ENABLED: "true"
+    ports:
+      - "127.0.0.1:${OPS_PORT:-8081}:8080"
+
+volumes:
+  mysql-data:
