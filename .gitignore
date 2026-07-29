@@ -5,6 +5,9 @@ dist/
 .gstack/
 .superpowers/
 
+# Maven / 构建产物
+target/
+
 # Local reference exports
 \# 远方有温度网站设计方案__## 一、设计理解__这不是一个_秀_/
 
