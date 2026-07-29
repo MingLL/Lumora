@@ -21,7 +21,7 @@
         <java.version>17</java.version>
         <weixin-java.version>4.7.0</weixin-java.version>
         <mybatis-spring-boot.version>3.0.4</mybatis-spring-boot.version>
-        <testcontainers.version>1.20.6</testcontainers.version>
+        <testcontainers.version>1.21.4</testcontainers.version>
     </properties>
 
     <dependencyManagement>
