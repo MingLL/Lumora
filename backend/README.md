@@ -39,6 +39,29 @@ docker run --env-file .env -p 8080:8080 lumora-backend
 
 Copy `.env.example` to `.env` and fill it in before running.
 
+## Local WeChat Integration
+
+End-to-end tests cover the callback flow offline. To test against the real
+WeChat servers, use a [test account](https://mp.weixin.qq.com/debug/cgi-bin/sandbox)
+plus a local HTTPS tunnel - no production environment needed:
+
+1. `cp .env.dev.example .env` and fill in the test account values.
+2. Start the local stack (callback container only, no mail-sending worker):
+   ```bash
+   docker compose --profile migrate up migrate
+   docker compose up -d web
+   ```
+3. In another terminal, expose it publicly:
+   ```bash
+   ./scripts/dev-wechat-tunnel.sh
+   ```
+4. Paste the printed `https://…trycloudflare.com/wechat/callback/{WECHAT_APP_ID}`
+   into the test account backend as the callback URL, and set the matching
+   Token / EncodingAESKey.
+
+The `web` container already forces every `*_ENABLED` flag off, so a local
+instance never sends mail or runs scheduled jobs.
+
 ## Configuration
 
 Key environment variables:
