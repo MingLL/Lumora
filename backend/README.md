@@ -32,9 +32,10 @@ mvn -DskipTests package
 # Test (needs Docker: Testcontainers starts a MySQL instance)
 mvn test
 
-# Run as a container
-docker build -t lumora-backend .
-docker run --env-file .env -p 8080:8080 lumora-backend
+# Run as a container. Tag it `lumora:local` -- that is the name `compose.yaml`
+# looks for via `${LUMORA_IMAGE:-lumora:local}`.
+docker build -t lumora:local .
+docker run --env-file .env -p 8080:8080 lumora:local
 ```
 
 Copy `.env.example` to `.env` and fill it in before running.
@@ -45,17 +46,21 @@ End-to-end tests cover the callback flow offline. To test against the real
 WeChat servers, use a [test account](https://mp.weixin.qq.com/debug/cgi-bin/sandbox)
 plus a local HTTPS tunnel - no production environment needed:
 
-1. `cp .env.dev.example .env` and fill in the test account values.
-2. Start the local stack (callback container only, no mail-sending worker):
+1. Build the image once (compose expects the `lumora:local` tag):
+   ```bash
+   docker build -t lumora:local .
+   ```
+2. `cp .env.dev.example .env` and fill in the test account values.
+3. Start the local stack (callback container only, no mail-sending worker):
    ```bash
    docker compose --profile migrate up migrate
    docker compose up -d web
    ```
-3. In another terminal, expose it publicly:
+4. In another terminal, expose it publicly:
    ```bash
    ./scripts/dev-wechat-tunnel.sh
    ```
-4. Paste the printed `https://…trycloudflare.com/wechat/callback/{WECHAT_APP_ID}`
+5. Paste the printed `https://…trycloudflare.com/wechat/callback/{WECHAT_APP_ID}`
    into the test account backend as the callback URL, and set the matching
    Token / EncodingAESKey.
 
@@ -105,8 +110,8 @@ The application never migrates implicitly — `spring.flyway.enabled` is `false`
 Run migrations as a separate one-shot container before releasing a new version:
 
 ```bash
-docker run --rm --env-file .env -e LUMORA_MODE=migrate lumora-backend
-docker run --rm --env-file .env -e LUMORA_MODE=schema-smoke lumora-backend
+docker run --rm --env-file .env -e LUMORA_MODE=migrate lumora:local
+docker run --rm --env-file .env -e LUMORA_MODE=schema-smoke lumora:local
 ```
 
 Migrations are expand-only: a release adds nullable columns, tables or
