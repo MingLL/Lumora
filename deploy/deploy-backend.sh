@@ -19,6 +19,7 @@ NAMESPACE=lumora
 REMOTE_ENV=/opt/lumora/backend/.env        # 服务器上的凭据，不进 git，脚本只读不写
 REMOTE_TMP=/tmp
 PLATFORM=linux/amd64                        # 本地可能是 arm64 Mac，服务器是 x86_64
+K3S=/usr/local/bin/k3s                     # sudo 的 secure_path 不包含 /usr/local/bin
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$REPO_ROOT"
@@ -49,13 +50,13 @@ step "预检"
 command -v docker >/dev/null || fail "本地没有 docker"
 for h in "${HOSTS[@]}"; do
   ssh -o BatchMode=yes -o ConnectTimeout=10 "$h" true 2>/dev/null || fail "连不上 $h"
-  # 只读检查：确认凭据文件存在且权限收紧，不读取也不打印其内容。
-  ssh "$h" "test -f '$REMOTE_ENV'" || fail "$h 上缺少 $REMOTE_ENV"
-  perms=$(ssh "$h" "stat -c '%a' '$REMOTE_ENV'")
-  # ${} 的花括号是必要的：变量名后面直接跟中文标点会被 bash 吃进变量名。
-  [[ "${perms: -1}" == "0" ]] || fail "$h 上 $REMOTE_ENV 权限是 ${perms}，应为 600"
   info "$h ✓"
 done
+# Secret 只由控制节点上的文件生成，工作节点不需要复制生产密钥。
+ssh "$CONTROL_HOST" "test -f '$REMOTE_ENV'" || fail "$CONTROL_HOST 上缺少 $REMOTE_ENV"
+perms=$(ssh "$CONTROL_HOST" "stat -c '%a' '$REMOTE_ENV'")
+# ${} 的花括号是必要的：变量名后面直接跟中文标点会被 bash 吃进变量名。
+[[ "${perms: -1}" == "0" ]] || fail "$CONTROL_HOST 上 $REMOTE_ENV 权限是 ${perms}，应为 600"
 
 step "构建镜像 ${IMAGE}（${PLATFORM}）"
 if [[ "$skip_build" == false ]]; then
@@ -73,35 +74,35 @@ docker save "$IMAGE" -o "/tmp/$TAR"
 for h in "${HOSTS[@]}"; do
   printf '    %s ' "$h"
   scp -q "/tmp/$TAR" "$h:$REMOTE_TMP/$TAR"
-  ssh "$h" "sudo k3s ctr images import '$REMOTE_TMP/$TAR' >/dev/null && rm -f '$REMOTE_TMP/$TAR'"
+  ssh "$h" "sudo $K3S ctr images import '$REMOTE_TMP/$TAR' >/dev/null && rm -f '$REMOTE_TMP/$TAR'"
   printf '✓\n'
 done
 rm -f "/tmp/$TAR"
 
 step "刷新 Secret/lumora-env"
 # 从服务器上的 .env 生成，值不经过本地，也不出现在命令行参数里。
-ssh "$CONTROL_HOST" "sudo k3s kubectl create namespace '$NAMESPACE' \
-    --dry-run=client -o yaml | sudo k3s kubectl apply -f - >/dev/null"
-ssh "$CONTROL_HOST" "sudo k3s kubectl -n '$NAMESPACE' create secret generic lumora-env \
-    --from-env-file='$REMOTE_ENV' --dry-run=client -o yaml | sudo k3s kubectl apply -f - >/dev/null"
+ssh "$CONTROL_HOST" "sudo $K3S kubectl create namespace '$NAMESPACE' \
+    --dry-run=client -o yaml | sudo $K3S kubectl apply -f - >/dev/null"
+ssh "$CONTROL_HOST" "sudo $K3S kubectl -n '$NAMESPACE' create secret generic lumora-env \
+    --from-env-file='$REMOTE_ENV' --dry-run=client -o yaml | sudo $K3S kubectl apply -f - >/dev/null"
 info "已更新（未打印任何值）"
 
 step "执行迁移（expand-only）"
 # 必须在 apply 应用清单之前完成：旧版本和新版本都要能跑在迁移后的库上。
 sed -e "s|__IMAGE__|$IMAGE|g" -e "s|__IMAGE_TAG__|$tag|g" \
     deploy/k8s/lumora-backend-migrate.yaml \
-  | ssh "$CONTROL_HOST" "cat > /tmp/lumora-migrate.yaml && sudo k3s kubectl apply -f /tmp/lumora-migrate.yaml"
-if ! ssh "$CONTROL_HOST" "sudo k3s kubectl -n '$NAMESPACE' wait --for=condition=complete \
+  | ssh "$CONTROL_HOST" "cat > /tmp/lumora-migrate.yaml && sudo $K3S kubectl apply -f /tmp/lumora-migrate.yaml"
+if ! ssh "$CONTROL_HOST" "sudo $K3S kubectl -n '$NAMESPACE' wait --for=condition=complete \
       job/lumora-migrate-$tag --timeout=300s" >/dev/null; then
-  ssh "$CONTROL_HOST" "sudo k3s kubectl -n '$NAMESPACE' logs job/lumora-migrate-$tag --tail=50" >&2 || true
+  ssh "$CONTROL_HOST" "sudo $K3S kubectl -n '$NAMESPACE' logs job/lumora-migrate-$tag --tail=50" >&2 || true
   fail "迁移失败，未改动任何正在运行的服务"
 fi
 info "迁移完成"
 
 step "校验新旧镜像都能用迁移后的库"
-ssh "$CONTROL_HOST" "sudo k3s kubectl -n '$NAMESPACE' run lumora-smoke-$tag \
+ssh "$CONTROL_HOST" "sudo $K3S kubectl -n '$NAMESPACE' run lumora-smoke-$tag \
     --image='$IMAGE' --restart=Never --rm -i --quiet \
-    --overrides='{\"spec\":{\"containers\":[{\"name\":\"smoke\",\"image\":\"$IMAGE\",\"env\":[{\"name\":\"LUMORA_MODE\",\"value\":\"schema-smoke\"}],\"envFrom\":[{\"secretRef\":{\"name\":\"lumora-env\"}}]}]}}' \
+    --overrides='{\"spec\":{\"enableServiceLinks\":false,\"containers\":[{\"name\":\"smoke\",\"image\":\"$IMAGE\",\"env\":[{\"name\":\"LUMORA_MODE\",\"value\":\"schema-smoke\"}],\"envFrom\":[{\"secretRef\":{\"name\":\"lumora-env\"}}]}]}}' \
     " >/dev/null || fail "schema-smoke 失败：候选镜像读不了迁移后的库"
 info "schema-smoke 通过"
 
@@ -109,24 +110,24 @@ step "应用清单"
 manifest_hash=$(shasum -a 256 deploy/k8s/lumora-backend.yaml | cut -c1-12)
 sed -e "s|__IMAGE__|$IMAGE|g" -e "s|__MANIFEST_HASH__|$manifest_hash|g" \
     deploy/k8s/lumora-backend.yaml \
-  | ssh "$CONTROL_HOST" "cat > /tmp/lumora-backend.yaml && sudo k3s kubectl apply -f /tmp/lumora-backend.yaml"
+  | ssh "$CONTROL_HOST" "cat > /tmp/lumora-backend.yaml && sudo $K3S kubectl apply -f /tmp/lumora-backend.yaml"
 
 step "等待就绪"
 for d in lumora-backend-web lumora-backend-ops lumora-backend-worker; do
   printf '    %s ' "$d"
-  if ssh "$CONTROL_HOST" "sudo k3s kubectl -n '$NAMESPACE' rollout status deployment/$d --timeout=180s" >/dev/null; then
+  if ssh "$CONTROL_HOST" "sudo $K3S kubectl -n '$NAMESPACE' rollout status deployment/$d --timeout=180s" >/dev/null; then
     printf '✓\n'
   else
     printf '\033[1;31m✗\033[0m\n'
-    ssh "$CONTROL_HOST" "sudo k3s kubectl -n '$NAMESPACE' logs deployment/$d --tail=40" >&2 || true
+    ssh "$CONTROL_HOST" "sudo $K3S kubectl -n '$NAMESPACE' logs deployment/$d --tail=40" >&2 || true
     fail "$d 未就绪。旧 pod 仍在服务（web 是 maxUnavailable=0）。回滚：
-      ssh $CONTROL_HOST \"sudo k3s kubectl -n $NAMESPACE rollout undo deployment/$d\""
+      ssh $CONTROL_HOST \"sudo $K3S kubectl -n $NAMESPACE rollout undo deployment/$d\""
   fi
 done
 
 step "验证"
 # web 通了才算数：回调路径必须能从集群内打通。
-ssh "$CONTROL_HOST" "sudo k3s kubectl -n '$NAMESPACE' exec deployment/lumora-backend-web -- \
+ssh "$CONTROL_HOST" "sudo $K3S kubectl -n '$NAMESPACE' exec deployment/lumora-backend-web -- \
     sh -c 'curl -fsS http://127.0.0.1:8080/actuator/health/liveness'" >/dev/null \
   || fail "web 存活探针不通"
 info "web 存活 ✓"
@@ -143,6 +144,6 @@ done
 
 printf '\n\033[1;32m后端发布完成：%s\033[0m\n' "$IMAGE"
 printf '手动补发（在服务器上，不走公网）：\n'
-printf '  ssh %s "sudo k3s kubectl -n %s exec deployment/lumora-backend-ops -- \\\n' "$CONTROL_HOST" "$NAMESPACE"
+printf '  ssh %s "sudo %s kubectl -n %s exec deployment/lumora-backend-ops -- \\\n' "$CONTROL_HOST" "$K3S" "$NAMESPACE"
 printf '    curl -fsS -X POST http://127.0.0.1:8080/internal/reports/YYYY-MM-DD/send \\\n'
 printf '    -H \x27X-Lumora-Admin-Key: <REPORT_ADMIN_KEY>\x27 -H \x27X-Request-Id: <uuid>\x27"\n'

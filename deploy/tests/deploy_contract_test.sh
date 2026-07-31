@@ -137,6 +137,94 @@ before() {
 
 # ------------------------------------------------------------------------ 用例
 
+printf '\n--- 资源配置 ---\n'
+tls_resolver=$(
+  awk '
+    $0 == "kind: IngressRoute" { ingress_route = 1; next }
+    ingress_route && $0 == "  name: lumora-love-tls" { lumora_tls = 1; next }
+    lumora_tls && $1 == "certResolver:" { print $2; exit }
+  ' "$TEST_ROOT/deploy/k8s/lumora.yaml"
+)
+[[ "$tls_resolver" == "le-prod" ]] \
+  && ok "lumora.love 使用线上存在的 le-prod 证书解析器" \
+  || no "lumora.love 的证书解析器是 ${tls_resolver:-未配置}，预期为 le-prod"
+
+tls_entrypoints=$(
+  awk '
+    $0 == "kind: IngressRoute" { ingress_route = 1; next }
+    ingress_route && $0 == "  name: lumora-love-tls" { lumora_tls = 1; next }
+    lumora_tls && $0 == "  entryPoints:" { entrypoints = 1; next }
+    entrypoints && /^    - / { print $2; next }
+    entrypoints { exit }
+  ' "$TEST_ROOT/deploy/k8s/lumora.yaml" | paste -sd, -
+)
+[[ "$tls_entrypoints" == "websecure" ]] \
+  && ok "TLS 路由只占用 websecure，保留 web 给 ACME HTTP challenge" \
+  || no "TLS 路由 entryPoints 是 ${tls_entrypoints:-未配置}，预期只包含 websecure"
+
+frontend_node=$(
+  awk '
+    $0 == "kind: DaemonSet" { daemonset = 1; next }
+    daemonset && $0 == "  name: lumora-web" { web = 1; next }
+    web && $1 == "kubernetes.io/hostname:" { print $2; exit }
+  ' "$TEST_ROOT/deploy/k8s/lumora.yaml"
+)
+[[ "$frontend_node" == "dev1" ]] \
+  && ok "前端 Pod 只调度到有公网入口的 dev1" \
+  || no "前端 Pod 调度节点是 ${frontend_node:-未指定}，预期为 dev1"
+
+frontend_hosts=$(
+  awk -F'[()]' '$1 == "HOSTS=" { print $2; exit }' "$TEST_ROOT/deploy/deploy.sh"
+)
+[[ "$frontend_hosts" == "dev1" ]] \
+  && ok "前端静态文件只同步到 dev1" \
+  || no "前端静态文件同步目标是 ${frontend_hosts:-未找到}，预期仅 dev1"
+
+web_replicas=$(
+  awk '
+    $0 == "kind: Deployment" { deployment = 1; next }
+    deployment && $0 == "  name: lumora-backend-web" { web = 1; next }
+    web && $1 == "replicas:" { print $2; exit }
+  ' "$TEST_ROOT/deploy/k8s/lumora-backend.yaml"
+)
+[[ "$web_replicas" == "1" ]] \
+  && ok "低内存集群默认只运行一个 Web 副本" \
+  || no "Web 副本数是 ${web_replicas:-未找到}，预期为 1"
+
+web_node=$(
+  awk '
+    $0 == "kind: Deployment" { deployment = 1; web = 0; next }
+    deployment && $0 == "  name: lumora-backend-web" { web = 1; next }
+    web && $1 == "kubernetes.io/hostname:" { print $2; exit }
+  ' "$TEST_ROOT/deploy/k8s/lumora-backend.yaml"
+)
+[[ "$web_node" == "dev1" ]] \
+  && ok "Web Pod 固定调度到 dev1" \
+  || no "Web Pod 调度节点是 ${web_node:-未指定}，预期为 dev1"
+
+for role in worker ops; do
+  role_node=$(
+    awk -v target="lumora-backend-${role}" '
+      $0 == "kind: Deployment" { deployment = 1; matched = 0; next }
+      deployment && $0 == "  name: " target { matched = 1; next }
+      matched && $1 == "kubernetes.io/hostname:" { print $2; exit }
+    ' "$TEST_ROOT/deploy/k8s/lumora-backend.yaml"
+  )
+  [[ "$role_node" == "dev2" ]] \
+    && ok "${role} Pod 固定调度到 dev2" \
+    || no "${role} Pod 调度节点是 ${role_node:-未指定}，预期为 dev2"
+done
+
+service_links_disabled=$(
+  grep -h -c "enableServiceLinks: false" \
+    "$TEST_ROOT/deploy/k8s/lumora-backend.yaml" \
+    "$TEST_ROOT/deploy/k8s/lumora-backend-migrate.yaml" \
+    | awk '{ total += $1 } END { print total + 0 }'
+)
+[[ "$service_links_disabled" == "4" ]] \
+  && ok "四种后端 Pod 都禁用 Kubernetes Service 环境变量注入" \
+  || no "只有 ${service_links_disabled} 个后端 Pod 禁用 Service Links，预期为 4"
+
 printf '\n--- 正常发布路径 ---\n'
 status=$(run_deploy happy)
 [[ "$status" == "0" ]] && ok "正常路径退出码 0" || no "正常路径退出码 $status"
@@ -161,6 +249,23 @@ imports=$(grep -c "k3s ctr images import" "$CALLS")
 grep -q "from-env-file" "$CALLS" \
   && ok "Secret 从服务器上的 .env 生成，值不经过本地" \
   || no "Secret 生成方式不对"
+
+env_checks=$(grep -c "test -f '/opt/lumora/backend/.env'" "$CALLS")
+[[ "$env_checks" == "1" ]] && grep -q "ssh dev1 test -f" "$CALLS" \
+  && ok "只在控制节点检查 Secret 源文件" \
+  || no "应只检查 dev1 上的 Secret 源文件，实际检查 ${env_checks} 次"
+
+if grep -q "sudo /usr/local/bin/k3s" "$CALLS"; then
+  ok "sudo 使用 k3s 绝对路径（服务器 secure_path 不含 /usr/local/bin）"
+else
+  no "sudo 没有使用 /usr/local/bin/k3s"
+fi
+
+if grep "schema-smoke" "$CALLS" | grep -q '"enableServiceLinks":false'; then
+  ok "临时 schema-smoke Pod 禁用 Service Links"
+else
+  no "临时 schema-smoke Pod 未禁用 Service Links"
+fi
 
 printf '\n--- 不泄密 ---\n'
 if grep -q "do-not-print-me" "$WORK/stdout.log" "$WORK/stderr.log" "$CALLS"; then

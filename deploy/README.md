@@ -241,9 +241,13 @@ ssh dev1 'k3s kubectl delete ns lumora'
 | 角色 | 副本 | 后台任务 | 内部发送 | 公网 |
 |---|---|---|---|---|
 | `migrate` (Job) | 一次性 | — | — | 无 |
-| `web` | 2 | 全关 | 关 | `/wechat/callback/` |
+| `web` | 1 | 全关 | 关 | `/wechat/callback/` |
 | `worker` | 1 | 全开 | 关 | 无 |
 | `ops` | 1 | 全关 | 开 | 无，仅 ClusterIP |
+
+低内存阶段唯一的 `web` Pod 通过 `nodeSelector` 固定在 `dev1`；`worker`、
+`ops` 和集群内 MySQL 固定在 `dev2`。任一节点不可用时，对应工作负载不会自动
+漂移。三个 Java Deployment 的内存请求为 256 MiB、限制为 512 MiB。
 
 **为什么 worker 是 `strategy: Recreate`**：先停旧的再起新的，保证任一时刻最多一个
 调度实例。数据库租约仍是最终保障，但发布过程不该依赖它兜底。worker 的就绪探针查

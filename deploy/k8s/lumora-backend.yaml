@@ -69,7 +69,8 @@ metadata:
     app: lumora-backend
     role: web
 spec:
-  replicas: 2
+  # 两台节点都只有 2 GiB 内存；低流量阶段先保留一个 Web 副本。
+  replicas: 1
   selector:
     matchLabels:
       app: lumora-backend
@@ -87,6 +88,11 @@ spec:
       annotations:
         lumora/manifest-hash: "__MANIFEST_HASH__"
     spec:
+      # 避免 Service/lumora-mysql 自动注入 LUMORA_MYSQL_PORT=tcp://...，
+      # 与 Spring 的整数配置 lumora.mysql-port 冲突。服务发现统一走 DNS。
+      enableServiceLinks: false
+      nodeSelector:
+        kubernetes.io/hostname: dev1
       containers:
         - name: lumora
           image: __IMAGE__
@@ -112,10 +118,10 @@ spec:
           resources:
             requests:
               cpu: 50m
-              memory: 384Mi
+              memory: 256Mi
             limits:
               cpu: "1"
-              memory: 768Mi
+              memory: 512Mi
           startupProbe:
             httpGet:
               path: /actuator/health/liveness
@@ -164,6 +170,9 @@ spec:
       annotations:
         lumora/manifest-hash: "__MANIFEST_HASH__"
     spec:
+      enableServiceLinks: false
+      nodeSelector:
+        kubernetes.io/hostname: dev2
       containers:
         - name: lumora
           image: __IMAGE__
@@ -189,10 +198,10 @@ spec:
           resources:
             requests:
               cpu: 50m
-              memory: 384Mi
+              memory: 256Mi
             limits:
               cpu: "1"
-              memory: 768Mi
+              memory: 512Mi
           readinessProbe:
             # WorkerReadinessVerifier 校验通过（模式对、数据库通、三个定时任务
             # 都注册了）才会写这个文件。"进程起来了" 不等于 "在干活"。
@@ -234,6 +243,9 @@ spec:
       annotations:
         lumora/manifest-hash: "__MANIFEST_HASH__"
     spec:
+      enableServiceLinks: false
+      nodeSelector:
+        kubernetes.io/hostname: dev2
       containers:
         - name: lumora
           image: __IMAGE__
@@ -258,10 +270,10 @@ spec:
           resources:
             requests:
               cpu: 50m
-              memory: 384Mi
+              memory: 256Mi
             limits:
               cpu: "1"
-              memory: 768Mi
+              memory: 512Mi
           readinessProbe:
             httpGet:
               path: /actuator/health/readiness

@@ -26,6 +26,9 @@ spec:
         role: migrate
     spec:
       restartPolicy: Never
+      # 避免 Service/lumora-mysql 注入 LUMORA_MYSQL_PORT=tcp://...，
+      # 覆盖应用期望的整数 MYSQL_PORT。
+      enableServiceLinks: false
       containers:
         - name: migrate
           image: __IMAGE__
