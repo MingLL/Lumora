@@ -9,9 +9,9 @@
 # 站点是纯静态的，服务器上不需要 Node —— 构建在本地完成，只把 dist/ 推上去。
 set -euo pipefail
 
-HOSTS=(dev1 dev2)
+HOSTS=(dev1)
 CONTROL_HOST=dev1                          # 跑 kubectl 的节点（k3s control-plane）
-SITE_IPS=(47.120.54.233 47.120.64.186)
+SITE_IPS=(47.120.54.233)
 REMOTE_DIR=/opt/lumora/site
 FRONTEND_DIR=frontend                      # Astro 站点的根，npm 相关的都在里面
 DIST=$FRONTEND_DIR/dist
