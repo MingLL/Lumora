@@ -760,13 +760,14 @@ def render(day, stats, prev):
             geo = visitor.get("geo", {})
             location_parts = [geo.get(field, "") for field in ("country", "region", "city")
                               if geo.get(field, "")]
-            if geo.get("status") == "private":
+            status = geo.get("status")
+            if status == "private":
                 location = "内网或保留地址"
-            elif not location_parts:
+            elif status == "unavailable" or not location_parts:
                 location = "归属地暂不可用"
             else:
                 location = " · ".join(e(value) for value in location_parts)
-            isp = geo.get("isp", "")
+            isp = "" if status in ("private", "unavailable") else geo.get("isp", "")
             isp_html = ('<div style="font-size:11px;color:#9a9285;margin-top:2px">ISP：%s</div>'
                         % e(isp)) if isp else ""
             parts.append(

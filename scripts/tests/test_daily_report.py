@@ -220,6 +220,26 @@ class ReportRenderingTest(unittest.TestCase):
         self.assertIn("归属地暂不可用", body)
         self.assertNotIn("ISP：", body)
 
+    def test_unavailable_status_ignores_all_residual_geo_fields(self):
+        visitor = {"ip": "1.1.1.1", "hits": 1, "paths": 1,
+                   "geo": {"country": "StaleCountry", "region": "StaleRegion",
+                           "city": "StaleCity", "isp": "StaleISP",
+                           "status": "unavailable"}}
+        body = daily_report.render(datetime(2026, 8, 3).date(), self.stats([visitor]), None)
+        self.assertIn("归属地暂不可用", body)
+        for stale_value in ("StaleCountry", "StaleRegion", "StaleCity", "StaleISP"):
+            self.assertNotIn(stale_value, body)
+
+    def test_private_status_ignores_all_residual_geo_fields(self):
+        visitor = {"ip": "10.0.0.1", "hits": 1, "paths": 1,
+                   "geo": {"country": "WrongCountry", "region": "WrongRegion",
+                           "city": "WrongCity", "isp": "WrongISP",
+                           "status": "private"}}
+        body = daily_report.render(datetime(2026, 8, 3).date(), self.stats([visitor]), None)
+        self.assertIn("内网或保留地址", body)
+        for wrong_value in ("WrongCountry", "WrongRegion", "WrongCity", "WrongISP"):
+            self.assertNotIn(wrong_value, body)
+
     def test_visitor_card_is_absent_when_there_are_no_top_visitors(self):
         body = daily_report.render(datetime(2026, 8, 3).date(), self.stats([]), None)
         self.assertNotIn("访问最多的访客", body)
