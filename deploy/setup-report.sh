@@ -46,7 +46,7 @@ SMTP_PORT=465
 SMTP_USER=你的QQ号@qq.com
 SMTP_PASS=在这里填授权码
 MAIL_FROM=你的QQ号@qq.com
-MAIL_TO=ambition1314@icloud.com
+MAIL_TO=接收日报的邮箱
 ENVTEMPLATE
   scp -q "$tmp" "$HOST:$ENV_FILE"
   ssh "$HOST" "chmod 600 $ENV_FILE"

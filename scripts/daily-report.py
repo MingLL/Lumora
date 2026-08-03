@@ -647,7 +647,7 @@ def render(day, stats, prev):
 
     parts.append(
         '<div style="font-size:11px;color:#b3aca1;text-align:center;margin-top:18px;line-height:1.7">'
-        'http://47.120.54.233<br>'
+        'https://lumora.love<br>'
         '由 dev1 上的 daily-report.py 于每日 07:00 生成</div>'
     )
     parts.append('</div>')

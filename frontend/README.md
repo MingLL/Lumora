@@ -136,8 +136,8 @@ npm run build && npm run fonts
 
 ## 部署
 
-站点已部署在自有服务器（dev1 / dev2 上的 k3s 集群），当前可通过
-http://47.120.54.233 访问。
+站点已部署在自有服务器（dev1 / dev2 上的 k3s 集群），通过
+https://lumora.love 访问（80 端口会 301 到 https）。
 
 发布脚本在仓库根目录（它会自己进 `frontend/` 构建）：
 

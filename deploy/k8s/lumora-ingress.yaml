@@ -1,0 +1,72 @@
+# 远方有温度 —— 对外入口层（HTTPS 路由 + 安全响应头）
+#
+# 前后端共用这一层，所以单独成文件：放进 lumora.yaml 会让前端发布顺带接管
+# 后端的路由，放进 lumora-backend.yaml 则反过来。两个发布脚本都会 apply 它。
+#
+# 分工：
+#   - 本文件的 IngressRoute 承载 websecure(443) 的全部路由，并签发/续签证书；
+#   - lumora.yaml 里的 Ingress 只覆盖 web(80)，且 Traefik 在入口层把 80 整体
+#     301 到 443（见 deploy/README.md「接域名」）。
+#
+# ⚠️ 这两个对象曾长期只存在于线上、不在仓库里，导致 deploy.sh 用旧清单把线上
+#    改动覆盖掉过。改动请务必写回本文件。
+---
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: lumora-security-headers
+  namespace: lumora
+spec:
+  headers:
+    # HSTS 半年。forceSTSHeader 关着，所以只在 HTTPS 响应上带这个头，
+    # 不会在明文响应里误发。
+    stsSeconds: 15552000
+    stsIncludeSubdomains: true
+    stsPreload: false
+    forceSTSHeader: false
+    frameDeny: true
+    contentTypeNosniff: true
+    referrerPolicy: strict-origin-when-cross-origin
+    customResponseHeaders:
+      # CSP 先用 Report-Only 观察，确认没有误伤再换成 Content-Security-Policy。
+      # 站点有一个内联 <script type="module">，所以暂时留着 'unsafe-inline'。
+      Content-Security-Policy-Report-Only: >-
+        default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none';
+        form-action 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline';
+        script-src 'self' 'unsafe-inline'; connect-src 'self'; upgrade-insecure-requests
+      Permissions-Policy: >-
+        camera=(), microphone=(), geolocation=(), payment=(), usb=(),
+        interest-cohort=()
+---
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
+metadata:
+  name: lumora-love-tls
+  namespace: lumora
+spec:
+  entryPoints:
+    - websecure
+  routes:
+    # 回调路径更长，用更高的 priority 保证先于兜底规则命中。
+    - kind: Rule
+      match: Host(`lumora.love`) && PathPrefix(`/wechat/callback`)
+      priority: 200
+      middlewares:
+        - name: lumora-security-headers
+          namespace: lumora
+      services:
+        - name: lumora-backend-web
+          port: 8080
+    - kind: Rule
+      match: Host(`lumora.love`)
+      priority: 100
+      middlewares:
+        - name: lumora-security-headers
+          namespace: lumora
+      services:
+        - name: lumora-web
+          port: 80
+  tls:
+    # Let's Encrypt，ACME http-01 走 80 端口 —— 入口层的 301 不会拦截挑战路径，
+    # Traefik 的 ACME 路由优先级高于跳转。
+    certResolver: le-prod

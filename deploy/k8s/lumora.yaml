@@ -186,12 +186,17 @@ kind: Ingress
 metadata:
   name: lumora-web
   namespace: lumora
+  annotations:
+    # 安全响应头。HTTPS 的路由由 IngressRoute lumora-love-tls 承载并自带该中间件，
+    # 这里再挂一次，保证走 Ingress 的流量同样有头。
+    traefik.ingress.kubernetes.io/router.middlewares: lumora-lumora-security-headers@kubernetescrd
 spec:
   ingressClassName: traefik
-  # 不写 host，任何 Host 头都能命中 —— IP 直接访问也走这条规则。
-  # 域名到位后在这里加 host 段和 TLS，见 deploy/README.md。
+  # 必须写 host：不写就是 catch-all，任何 Host 头都能命中，
+  # 站点会连着源站 IP 一起对外提供服务。
   rules:
-    - http:
+    - host: lumora.love
+      http:
         paths:
           - path: /
             pathType: Prefix

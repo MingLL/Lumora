@@ -11,7 +11,7 @@ set -euo pipefail
 
 HOSTS=(dev1 dev2)
 CONTROL_HOST=dev1                          # 跑 kubectl 的节点（k3s control-plane）
-SITE_IPS=(47.120.54.233 47.120.64.186)
+SITE_URL=https://lumora.love               # Ingress 按 host 匹配，用 IP 探测拿到的永远是 404
 REMOTE_DIR=/opt/lumora/site
 FRONTEND_DIR=frontend                      # Astro 站点的根，npm 相关的都在里面
 DIST=$FRONTEND_DIR/dist
@@ -51,27 +51,32 @@ manifest_hash=$(shasum -a 256 deploy/k8s/lumora.yaml | cut -c1-12)
 sed "s/__MANIFEST_HASH__/$manifest_hash/" deploy/k8s/lumora.yaml \
   | ssh "$CONTROL_HOST" 'cat > /tmp/lumora.yaml && k3s kubectl apply -f /tmp/lumora.yaml'
 
+# 入口层（Middleware + IngressRoute）前后端共用，两个发布脚本都要 apply，
+# 否则线上改动会被另一边的旧状态覆盖。
+ssh "$CONTROL_HOST" 'cat > /tmp/lumora-ingress.yaml && k3s kubectl apply -f /tmp/lumora-ingress.yaml' \
+  < deploy/k8s/lumora-ingress.yaml
+
 step "等待 pod 就绪"
 ssh "$CONTROL_HOST" 'k3s kubectl rollout status daemonset/lumora-web -n lumora --timeout=120s'
 
 step "验证公网访问"
-unreachable=()
-for ip in "${SITE_IPS[@]}"; do
-  # curl 失败时 %{http_code} 本身就输出 000，不要再 || echo 叠加一次
-  code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 10 "http://$ip/" 2>/dev/null || true)
-  if [[ "$code" == "200" ]]; then
-    printf '    http://%-16s → \033[1;32m200\033[0m\n' "$ip"
-  else
-    printf '    http://%-16s → \033[1;31m%s\033[0m\n' "$ip" "${code:-000}"
-    unreachable+=("$ip")
-  fi
-done
-
-if (( ${#unreachable[@]} )); then
-  # pod 已经 rollout 成功了，所以公网不通几乎都是安全组没放行 80，而不是应用问题
-  printf '\n\033[1;33m注意:\033[0m 以下 IP 公网不可达：%s\n' "${unreachable[*]}"
-  printf '      pod 已就绪，通常是阿里云安全组未放行 80 端口入方向。\n'
+# curl 失败时 %{http_code} 本身就输出 000，不要再 || echo 叠加一次
+code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 10 "$SITE_URL/" 2>/dev/null || true)
+if [[ "$code" != "200" ]]; then
+  printf '    %-22s → \033[1;31m%s\033[0m\n' "$SITE_URL/" "${code:-000}"
+  # pod 已经 rollout 成功了，所以公网不通几乎都是安全组或 DNS，而不是应用问题
+  printf '\n\033[1;33m注意:\033[0m 站点公网不可达。\n'
+  printf '      pod 已就绪，通常是阿里云安全组未放行 80/443 入方向，或 DNS 未指向 dev1。\n'
   printf '      排查：ssh %s "k3s kubectl -n lumora get pod -o wide"\n' "$CONTROL_HOST"
   exit 1
+fi
+printf '    %-22s → \033[1;32m200\033[0m\n' "$SITE_URL/"
+
+# 80 端口应当 301 到 https。这是加固项，回归了要当场看见，但不阻断发布。
+redirect=$(curl -s -o /dev/null -w '%{http_code}' --max-time 10 http://lumora.love/ 2>/dev/null || true)
+if [[ "$redirect" == "301" ]]; then
+  printf '    %-22s → \033[1;32m301 → https\033[0m\n' "http://lumora.love/"
+else
+  printf '    %-22s → \033[1;33m%s（预期 301）\033[0m\n' "http://lumora.love/" "${redirect:-000}"
 fi
 printf '\n\033[1;32m发布完成。\033[0m\n'

@@ -5,8 +5,7 @@ import tailwindcss from '@tailwindcss/vite';
 
 export default defineConfig({
   // canonical、sitemap、RSS、og:image 的绝对地址均由此生成。
-  // 域名到位后改成 https://你的域名，然后重新构建部署即可。
-  site: 'http://47.120.54.233',
+  site: 'https://lumora.love',
   integrations: [mdx(), sitemap()],
   vite: {
     plugins: [tailwindcss()]

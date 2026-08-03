@@ -7,6 +7,7 @@
 |---|---|---|
 | 发布命令 | `./deploy/deploy.sh` | `./deploy/deploy-backend.sh` |
 | 清单 | `deploy/k8s/lumora.yaml` | `deploy/k8s/lumora-backend*.yaml` |
+| 共用清单 | `deploy/k8s/lumora-ingress.yaml`（入口层，两边都会 apply） ||
 | 公网路径 | `/`（兜底） | `/wechat/callback/`（更长，优先命中） |
 | 详见 | 下文 | [后端发布](#后端发布) |
 
@@ -36,7 +37,7 @@ Traefik 是 k3s 自带的，不需要额外装 ingress controller。
 | 命名空间 | `lumora` |
 | 静态文件目录 | `/opt/lumora/site`（两台各一份） |
 | 镜像 | `public.ecr.aws/docker/library/nginx:1.29-alpine` |
-| 访问地址 | http://47.120.54.233 、 http://47.120.64.186 |
+| 访问地址 | https://lumora.love（80 端口 301 到 https；Ingress 按 host 匹配，直连 IP 会 404） |
 
 **为什么用 ECR Public 的 nginx**：这两台阿里云机器直连 Docker Hub 不通，
 而 k3s 配置的 `registry.cn-hangzhou.aliyuncs.com` 镜像源只代理 k8s 组件、
@@ -69,12 +70,12 @@ Traefik 是 k3s 自带的，不需要额外装 ingress controller。
 
 ## 待办：放行 dev2 的 80 端口
 
-目前 **dev2(47.120.64.186) 的公网 80 被阿里云安全组拦截**，dev1 已放行。
+目前 **dev2 的公网 80 被阿里云安全组拦截**，dev1 已放行。
 两个节点的 nginx 都健康（集群内访问 dev2 返回 200），只是外网进不来。
 
 在阿里云控制台放行即可：
 
-> ECS 控制台 → 实例 `i-f8z7tkykzanln8ym6jxm`（区域 cn-heyuan）→ 安全组 →
+> ECS 控制台 → 找到 dev2 实例 → 安全组 →
 > 配置规则 → 入方向 → 手动添加：协议 TCP、端口 `80/80`、源 `0.0.0.0/0`
 
 放行后重新跑一次 `./deploy/deploy.sh --skip-build`，两个 IP 都会显示 200。
@@ -90,7 +91,11 @@ aliyun ecs AuthorizeSecurityGroup --RegionId cn-heyuan \
 
 ## 接域名
 
-1. 域名解析加 A 记录，指向 `47.120.54.233`（放行 dev2 后可以两个 IP 都加做轮询）。
+> 已完成：`lumora.love` 已解析到 dev1，Ingress 按 host 匹配，Traefik 用 Let's Encrypt
+> 签发证书（ACME http-01 走 80 端口），80 端口在入口层 301 到 https。
+> 以下步骤保留作换域名时的参考。
+
+1. 域名解析加 A 记录，指向 dev1 的公网 IP（放行 dev2 后可以两个 IP 都加做轮询）。
 
 2. 改 `frontend/astro.config.mjs` 的 `site`，这决定 canonical / sitemap / RSS 里的绝对地址：
 

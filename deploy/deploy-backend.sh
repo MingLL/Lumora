@@ -16,6 +16,7 @@ set -euo pipefail
 HOSTS=(dev1 dev2)
 CONTROL_HOST=dev1
 NAMESPACE=lumora
+SITE_URL=https://lumora.love                # Ingress 按 host 匹配，探测必须带对域名才有意义
 REMOTE_ENV=/opt/lumora/backend/.env        # 服务器上的凭据，不进 git，脚本只读不写
 REMOTE_TMP=/tmp
 PLATFORM=linux/amd64                        # 本地可能是 arm64 Mac，服务器是 x86_64
@@ -111,6 +112,11 @@ sed -e "s|__IMAGE__|$IMAGE|g" -e "s|__MANIFEST_HASH__|$manifest_hash|g" \
     deploy/k8s/lumora-backend.yaml \
   | ssh "$CONTROL_HOST" "cat > /tmp/lumora-backend.yaml && sudo k3s kubectl apply -f /tmp/lumora-backend.yaml"
 
+# 入口层（Middleware + IngressRoute）前后端共用，两个发布脚本都要 apply，
+# 否则线上改动会被另一边的旧状态覆盖。
+ssh "$CONTROL_HOST" "cat > /tmp/lumora-ingress.yaml && sudo k3s kubectl apply -f /tmp/lumora-ingress.yaml" \
+  < deploy/k8s/lumora-ingress.yaml
+
 step "等待就绪"
 for d in lumora-backend-web lumora-backend-ops lumora-backend-worker; do
   printf '    %s ' "$d"
@@ -133,7 +139,7 @@ info "web 存活 ✓"
 
 # 公网只应放出回调路径；内部端点必须打不到。
 for path in /internal/reports/2026-01-01/send /actuator/health/readiness; do
-  code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 10 "http://47.120.54.233$path" || true)
+  code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 10 "$SITE_URL$path" || true)
   if [[ "$code" == "404" || "$code" == "000" ]]; then
     info "公网 $path → $code ✓"
   else
