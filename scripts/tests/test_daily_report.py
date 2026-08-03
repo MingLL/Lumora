@@ -1,3 +1,4 @@
+import argparse
 import importlib.util
 import json
 import os
@@ -103,6 +104,141 @@ class TopVisitorsTest(unittest.TestCase):
         ])
 
         self.assertEqual(self.top_visitors(stats), [])
+
+
+class EnrichmentTest(unittest.TestCase):
+    class FakeProvider(object):
+        def __init__(self, results):
+            self.results = results
+            self.calls = []
+
+        def lookup(self, ip):
+            self.calls.append(ip)
+            result = self.results[ip]
+            if isinstance(result, Exception):
+                raise result
+            return result
+
+    def test_enriches_each_existing_row_once_and_preserves_counts(self):
+        stats = {"top_visitors": [
+            {"ip": "8.8.8.8", "hits": 7, "paths": 3},
+            {"ip": "10.0.0.1", "hits": 4, "paths": 2},
+            {"ip": "1.1.1.1", "hits": 2, "paths": 1},
+        ]}
+        provider = self.FakeProvider({
+            "8.8.8.8": {"country": "US", "region": "CA", "city": "LA",
+                         "isp": "ISP", "status": "ok"},
+            "10.0.0.1": {"country": "", "region": "", "city": "",
+                           "isp": "", "status": "private"},
+            "1.1.1.1": {"country": "", "region": "", "city": "",
+                         "isp": "", "status": "unavailable"},
+        })
+
+        daily_report.enrich_top_visitors(stats, provider)
+
+        self.assertEqual(provider.calls, ["8.8.8.8", "10.0.0.1", "1.1.1.1"])
+        self.assertEqual(stats["top_visitors"][0], {
+            "ip": "8.8.8.8", "hits": 7, "paths": 3,
+            "geo": {"country": "US", "region": "CA", "city": "LA",
+                    "isp": "ISP", "status": "ok"},
+        })
+        self.assertEqual(stats["top_visitors"][1]["geo"]["status"], "private")
+        self.assertEqual(stats["top_visitors"][2]["geo"]["status"], "unavailable")
+
+    def test_lookup_exception_becomes_unavailable_and_remaining_rows_continue(self):
+        stats = {"top_visitors": [
+            {"ip": "bad", "hits": 2, "paths": 1},
+            {"ip": "good", "hits": 1, "paths": 1},
+        ]}
+        provider = self.FakeProvider({
+            "bad": RuntimeError("unexpected"),
+            "good": {"country": "China", "region": "", "city": "",
+                     "isp": "", "status": "ok"},
+        })
+
+        daily_report.enrich_top_visitors(stats, provider)
+
+        self.assertEqual(provider.calls, ["bad", "good"])
+        self.assertEqual(stats["top_visitors"][0]["geo"], {
+            "country": "", "region": "", "city": "", "isp": "",
+            "status": "unavailable",
+        })
+        self.assertEqual(stats["top_visitors"][1]["geo"]["country"], "China")
+
+    def test_empty_rows_make_no_calls_and_only_first_three_are_enriched(self):
+        empty_provider = self.FakeProvider({})
+        daily_report.enrich_top_visitors({"top_visitors": []}, empty_provider)
+        self.assertEqual(empty_provider.calls, [])
+
+        rows = [{"ip": str(index), "hits": 1, "paths": 1} for index in range(4)]
+        provider = self.FakeProvider({
+            str(index): {"country": "", "region": "", "city": "", "isp": "",
+                         "status": "unavailable"}
+            for index in range(3)
+        })
+        daily_report.enrich_top_visitors({"top_visitors": rows}, provider)
+        self.assertEqual(provider.calls, ["0", "1", "2"])
+        self.assertNotIn("geo", rows[3])
+
+
+class ReportRenderingTest(unittest.TestCase):
+    def stats(self, visitors):
+        stats = daily_report.summarize([])
+        stats["top_visitors"] = visitors
+        return stats
+
+    def test_renders_ok_private_and_unavailable_locations_and_escapes_strings(self):
+        visitors = [
+            {"ip": '<8.8.8.8&"full">', "hits": 9, "paths": 4,
+             "geo": {"country": "US<script>", "region": "", "city": "LA&West",
+                     "isp": 'ISP "One"', "status": "ok"}},
+            {"ip": "10.0.0.1", "hits": 3, "paths": 2,
+             "geo": {"country": "", "region": "", "city": "", "isp": "",
+                     "status": "private"}},
+            {"ip": "1.1.1.1", "hits": 1, "paths": 1,
+             "geo": {"country": "", "region": "", "city": "", "isp": "",
+                     "status": "unavailable"}},
+        ]
+
+        body = daily_report.render(datetime(2026, 8, 3).date(), self.stats(visitors), None)
+
+        self.assertIn("访问最多的访客", body)
+        self.assertIn('&lt;8.8.8.8&amp;&quot;full&quot;&gt;', body)
+        self.assertIn("US&lt;script&gt; · LA&amp;West", body)
+        self.assertNotIn("US&lt;script&gt; ·  · LA", body)
+        self.assertIn("ISP &quot;One&quot;", body)
+        self.assertIn("内网或保留地址", body)
+        self.assertIn("归属地暂不可用", body)
+        self.assertIn("9 次成功访问", body)
+        self.assertIn("4 个不同页面", body)
+
+    def test_ok_with_all_empty_geo_fields_is_unavailable_and_empty_isp_is_omitted(self):
+        visitor = {"ip": "8.8.4.4", "hits": 1, "paths": 1,
+                   "geo": {"country": "", "region": "", "city": "", "isp": "",
+                           "status": "ok"}}
+        body = daily_report.render(datetime(2026, 8, 3).date(), self.stats([visitor]), None)
+        self.assertIn("归属地暂不可用", body)
+        self.assertNotIn("ISP：", body)
+
+    def test_visitor_card_is_absent_when_there_are_no_top_visitors(self):
+        body = daily_report.render(datetime(2026, 8, 3).date(), self.stats([]), None)
+        self.assertNotIn("访问最多的访客", body)
+
+    def test_cmd_report_dry_run_uses_injected_provider(self):
+        provider = EnrichmentTest.FakeProvider({
+            "8.8.8.8": {"country": "US", "region": "", "city": "",
+                         "isp": "", "status": "ok"},
+        })
+        args = argparse.Namespace(date="2026-08-03", dry_run=True, out="report.html")
+        with tempfile.TemporaryDirectory() as tempdir:
+            args.out = os.path.join(tempdir, "report.html")
+            with mock.patch.object(daily_report, "load_day", return_value=[entry("8.8.8.8")]), \
+                    mock.patch.object(daily_report, "load_previous", return_value=None):
+                self.assertEqual(daily_report.cmd_report(args, provider=provider), 0)
+            with open(args.out) as report_file:
+                body = report_file.read()
+        self.assertEqual(provider.calls, ["8.8.8.8"])
+        self.assertIn("访问最多的访客", body)
 
 
 class OnlineGeoProviderTest(unittest.TestCase):

@@ -589,6 +589,25 @@ def summarize(entries):
     return stats
 
 
+def enrich_top_visitors(stats, provider):
+    empty = {"country": "", "region": "", "city": "", "isp": "",
+             "status": "unavailable"}
+    for row in stats.get("top_visitors", [])[:3]:
+        try:
+            result = provider.lookup(row["ip"])
+        except Exception:
+            result = empty
+        if not isinstance(result, dict):
+            result = empty
+        geo = {}
+        for field in ("country", "region", "city", "isp"):
+            value = result.get(field, "")
+            geo[field] = value if isinstance(value, str) else ""
+        status = result.get("status")
+        geo["status"] = status if status in ("ok", "private", "unavailable") else "unavailable"
+        row["geo"] = geo
+
+
 def load_previous(day):
     path = os.path.join(STATS_DIR, "%s.json" % day.strftime("%Y-%m-%d"))
     try:
@@ -733,6 +752,33 @@ def render(day, stats, prev):
                 parts.append('%02d 时 %s %d' % (hour, bar(count, peak), count))
         parts.append('</pre></div>')
 
+    # 访问最多的访客
+    if stats["top_visitors"]:
+        parts.append('<div style="%s"><h2 style="%s">访问最多的访客</h2>' % (css_card, css_h2))
+        parts.append('<table style="width:100%;border-collapse:collapse">')
+        for visitor in stats["top_visitors"]:
+            geo = visitor.get("geo", {})
+            location_parts = [geo.get(field, "") for field in ("country", "region", "city")
+                              if geo.get(field, "")]
+            if geo.get("status") == "private":
+                location = "内网或保留地址"
+            elif not location_parts:
+                location = "归属地暂不可用"
+            else:
+                location = " · ".join(e(value) for value in location_parts)
+            isp = geo.get("isp", "")
+            isp_html = ('<div style="font-size:11px;color:#9a9285;margin-top:2px">ISP：%s</div>'
+                        % e(isp)) if isp else ""
+            parts.append(
+                '<tr><td style="%s;font-family:SFMono-Regular,Menlo,monospace;font-size:12px">%s</td>'
+                '<td style="%s">%s%s</td>'
+                '<td style="%s;text-align:right">%d 次成功访问</td>'
+                '<td style="%s;text-align:right;color:#9a9285">%d 个不同页面</td></tr>'
+                % (css_td, e(visitor["ip"]), css_td, location, isp_html,
+                   css_td, visitor["hits"], css_td, visitor["paths"])
+            )
+        parts.append('</table></div>')
+
     # 爬虫明细
     if stats["bots"]:
         parts.append('<div style="%s"><h2 style="%s">爬虫与机器人</h2>' % (css_card, css_h2))
@@ -863,7 +909,7 @@ def send_mail(subject, body_html, conf):
 
 # ---------------------------------------------------------------- 入口
 
-def cmd_report(args):
+def cmd_report(args, provider=None):
     if args.date:
         day = datetime.strptime(args.date, "%Y-%m-%d").date()
     else:
@@ -871,6 +917,9 @@ def cmd_report(args):
 
     entries = load_day(day)
     stats = summarize(entries)
+    if provider is None:
+        provider = OnlineGeoProvider(GEO_CACHE_FILE)
+    enrich_top_visitors(stats, provider)
     prev = load_previous(day - timedelta(days=1))
     body = render(day, stats, prev)
 
