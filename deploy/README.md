@@ -193,6 +193,25 @@ ssh dev1 '/opt/lumora/bin/daily-report.py report --date 2026-07-27 --dry-run'  #
 只有 HTML 页面会进统计：nginx 对 `/images/`、`/_astro/`、`/fonts/` 都关了 access_log，
 所以 PV 天然就是页面浏览量，不含静态资源。
 
+### 访问最多的访客与归属地
+
+日报会列出访问最多的 3 个访客：只统计非爬虫且 HTTP 状态码为
+200 或 304 的成功页面访问，按成功访问次数从高到低排序。每行显示完整
+IP、成功访问次数和不同页面数。
+
+归属地默认通过 HTTPS 查询 `ipinfo.is`，显示国家/地区、省州、城市和 ISP。
+每份日报最多向该服务披露 3 个尚未缓存的公网 IP；内网、保留或其他
+非公网地址不会发送给外部服务。单次查询超时为 3 秒，超时、网络错误或
+响应异常时只标记“归属地暂不可用”，不会阻断其余日报生成或发送。
+
+成功的查询结果缓存在 `/var/lib/lumora/geo-cache.json`，有效期为 30 天，
+缓存文件权限为 `0600`。
+
+> **未来设计，尚未实现：** 如果需要完全离线的 IP 归属地查询，计划以
+> `GEO_PROVIDER` 作为在线/离线 provider 的选择边界，增加 MaxMind GeoLite2
+> MMDB provider，并由独立的定时更新流程下载和原子替换 MMDB 数据库。当前版本
+> 没有 `GEO_PROVIDER`、GeoLite2 MMDB 读取或数据库更新能力。
+
 ### 排查日报
 
 ```bash
