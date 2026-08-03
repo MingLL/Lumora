@@ -27,6 +27,7 @@ from __future__ import print_function
 import argparse
 import glob
 import html
+import ipaddress
 import json
 import os
 import re
@@ -38,6 +39,8 @@ from datetime import datetime, timedelta, timezone
 from email.header import Header
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
+from urllib.parse import quote
+from urllib.request import urlopen
 
 # ---------------------------------------------------------------- 配置
 
@@ -52,6 +55,9 @@ KUBECTL = ["k3s", "kubectl"]
 
 CST = timezone(timedelta(hours=8))
 ARCHIVE_KEEP_DAYS = 90
+GEO_CACHE_FILE = "/var/lib/lumora/geo-cache.json"
+GEO_CACHE_TTL = timedelta(days=30)
+GEO_API_BASE = "https://ipinfo.is/"
 
 SITE_NAME = "远方有温度"
 
@@ -114,6 +120,144 @@ SEARCH_ENGINES = [
     ("头条", r'toutiao\.'),
     ("DuckDuckGo", r'duckduckgo\.'),
 ]
+
+
+def _geo_transport(url, timeout):
+    with urlopen(url, timeout=timeout) as response:
+        return response.read()
+
+
+class OnlineGeoProvider(object):
+    def __init__(self, cache_path=GEO_CACHE_FILE, transport=None, now=None):
+        self.cache_path = cache_path
+        self.transport = transport or _geo_transport
+        self.now = now or (lambda: datetime.now(timezone.utc))
+
+    @staticmethod
+    def _empty(status):
+        return {"country": "", "region": "", "city": "", "isp": "",
+                "status": status}
+
+    @staticmethod
+    def _parse_time(value):
+        if not isinstance(value, str):
+            raise ValueError("timestamp is not a string")
+        normalized = value[:-1] + "+00:00" if value.endswith("Z") else value
+        # Python 3.6's %z parser does not accept the colon emitted by isoformat().
+        normalized = re.sub(r"([+-]\d\d):(\d\d)$", r"\1\2", normalized)
+        for time_format in ("%Y-%m-%dT%H:%M:%S%z", "%Y-%m-%dT%H:%M:%S.%f%z"):
+            try:
+                return datetime.strptime(normalized, time_format)
+            except ValueError:
+                pass
+        raise ValueError("invalid timestamp")
+
+    def _valid_row(self, row, current):
+        if not isinstance(row, dict):
+            return None
+        try:
+            looked_up_at = self._parse_time(row.get("looked_up_at"))
+        except (ValueError, TypeError):
+            return None
+        age = current - looked_up_at
+        fields = {}
+        for name in ("country", "region", "city", "isp"):
+            value = row.get(name)
+            if not isinstance(value, str):
+                return None
+            fields[name] = value
+        if age < timedelta(0) or age >= GEO_CACHE_TTL or not any(fields.values()):
+            return None
+        return fields
+
+    def _load_entries(self):
+        try:
+            with open(self.cache_path, "r") as cache_file:
+                cache = json.load(cache_file)
+            if (not isinstance(cache, dict) or cache.get("version") != 1 or
+                    not isinstance(cache.get("entries"), dict)):
+                return {}
+            return cache["entries"]
+        except Exception:
+            return {}
+
+    def _save(self, entries, current):
+        directory = os.path.dirname(self.cache_path) or "."
+        valid_entries = {}
+        for cached_ip, row in entries.items():
+            try:
+                cached_address = ipaddress.ip_address(cached_ip)
+                public = (cached_address.is_global and not cached_address.is_private and
+                          not cached_address.is_loopback and
+                          not cached_address.is_link_local and
+                          not cached_address.is_reserved and
+                          not cached_address.is_multicast and
+                          not cached_address.is_unspecified)
+            except (ValueError, TypeError):
+                public = False
+            if public and self._valid_row(row, current) is not None:
+                valid_entries[str(cached_address)] = row
+        temp_path = None
+        try:
+            import tempfile
+            fd, temp_path = tempfile.mkstemp(prefix=".geo-cache-", dir=directory)
+            with os.fdopen(fd, "w") as cache_file:
+                json.dump({"version": 1, "entries": valid_entries}, cache_file,
+                          separators=(",", ":"), sort_keys=True)
+                cache_file.flush()
+                os.fsync(cache_file.fileno())
+            os.chmod(temp_path, 0o600)
+            os.replace(temp_path, self.cache_path)
+            temp_path = None
+        except Exception:
+            pass
+        finally:
+            if temp_path is not None:
+                try:
+                    os.unlink(temp_path)
+                except OSError:
+                    pass
+
+    def lookup(self, ip):
+        try:
+            address = ipaddress.ip_address(ip)
+        except (ValueError, TypeError):
+            return self._empty("private")
+        if (not address.is_global or address.is_private or address.is_loopback or
+                address.is_link_local or address.is_reserved or
+                address.is_multicast or address.is_unspecified):
+            return self._empty("private")
+
+        try:
+            current = self.now()
+            entries = self._load_entries()
+            cached = self._valid_row(entries.get(str(address)), current)
+            if cached is not None:
+                cached["status"] = "ok"
+                return cached
+            raw = self.transport(GEO_API_BASE + quote(str(address), safe=""), 3)
+            payload = json.loads(raw.decode("utf-8"))
+            if not isinstance(payload, dict):
+                return self._empty("unavailable")
+            country_data = payload.get("country")
+            country = country_data.get("long_name") if isinstance(country_data, dict) else ""
+            values = {
+                "country": country if isinstance(country, str) else "",
+                "region": payload.get("region") if isinstance(payload.get("region"), str) else "",
+                "city": payload.get("city") if isinstance(payload.get("city"), str) else "",
+                "isp": payload.get("isp") if isinstance(payload.get("isp"), str) else "",
+            }
+            values["status"] = "ok" if any(values.values()) else "unavailable"
+            if values["status"] == "ok":
+                entries[str(address)] = {
+                    "looked_up_at": current.isoformat(),
+                    "country": values["country"], "region": values["region"],
+                    "city": values["city"], "isp": values["isp"],
+                }
+                self._save(entries, current)
+            return values
+        except Exception:
+            return self._empty("unavailable")
 
 
 def log(msg):
