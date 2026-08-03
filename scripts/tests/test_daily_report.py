@@ -42,20 +42,24 @@ class TopVisitorsTest(unittest.TestCase):
             [{"ip": "eligible", "hits": 2, "paths": 2}],
         )
 
-    def test_sorts_ties_by_ip_and_truncates_to_three(self):
+    def test_sorts_by_hits_then_ip_and_truncates_to_three(self):
         stats = daily_report.summarize([
             entry("10.0.0.4", "/a"),
+            entry("10.0.0.4", "/b"),
+            entry("10.0.0.4", "/c"),
             entry("10.0.0.3", "/a"),
+            entry("10.0.0.3", "/b"),
             entry("10.0.0.2", "/a"),
+            entry("10.0.0.2", "/b"),
             entry("10.0.0.1", "/a"),
         ])
 
         self.assertEqual(
             self.top_visitors(stats),
             [
-                {"ip": "10.0.0.1", "hits": 1, "paths": 1},
-                {"ip": "10.0.0.2", "hits": 1, "paths": 1},
-                {"ip": "10.0.0.3", "hits": 1, "paths": 1},
+                {"ip": "10.0.0.4", "hits": 3, "paths": 3},
+                {"ip": "10.0.0.2", "hits": 2, "paths": 2},
+                {"ip": "10.0.0.3", "hits": 2, "paths": 2},
             ],
         )
 
@@ -74,10 +78,17 @@ class TopVisitorsTest(unittest.TestCase):
     def test_returns_fewer_than_three_when_only_two_are_eligible(self):
         stats = daily_report.summarize([
             entry("10.0.0.2"),
+            entry("10.0.0.2", "/second"),
             entry("10.0.0.1"),
         ])
 
-        self.assertEqual(len(self.top_visitors(stats)), 2)
+        self.assertEqual(
+            self.top_visitors(stats),
+            [
+                {"ip": "10.0.0.2", "hits": 2, "paths": 2},
+                {"ip": "10.0.0.1", "hits": 1, "paths": 1},
+            ],
+        )
 
     def test_returns_empty_list_when_no_candidates_are_eligible(self):
         stats = daily_report.summarize([
