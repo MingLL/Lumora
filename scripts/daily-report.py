@@ -40,7 +40,7 @@ from email.header import Header
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from urllib.parse import quote
-from urllib.request import urlopen
+from urllib.request import Request, urlopen
 
 # ---------------------------------------------------------------- 配置
 
@@ -123,7 +123,8 @@ SEARCH_ENGINES = [
 
 
 def _geo_transport(url, timeout):
-    with urlopen(url, timeout=timeout) as response:
+    request = Request(url, headers={"User-Agent": "Lumora-Daily-Report/1.0"})
+    with urlopen(request, timeout=timeout) as response:
         return response.read()
 
 

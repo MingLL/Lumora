@@ -9,6 +9,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from unittest import mock
 from urllib.error import HTTPError, URLError
+from urllib.request import Request
 
 
 MODULE_PATH = Path(__file__).resolve().parents[1] / "daily-report.py"
@@ -427,13 +428,18 @@ class OnlineGeoProviderTest(unittest.TestCase):
                 })
                 self.assertFalse(os.path.exists(self.cache_path))
 
-    def test_default_transport_uses_urlopen_timeout_and_returns_bytes(self):
+    def test_default_transport_identifies_request_and_returns_bytes(self):
         response = mock.MagicMock()
         response.__enter__.return_value.read.return_value = b"response"
         with mock.patch.object(daily_report, "urlopen", return_value=response) as opener:
             self.assertEqual(daily_report._geo_transport("https://example.test", 3),
                              b"response")
-        opener.assert_called_once_with("https://example.test", timeout=3)
+        request = opener.call_args[0][0]
+        self.assertIsInstance(request, Request)
+        self.assertEqual(request.full_url, "https://example.test")
+        self.assertEqual(request.get_header("User-agent"),
+                         "Lumora-Daily-Report/1.0")
+        self.assertEqual(opener.call_args[1], {"timeout": 3})
 
     def test_atomic_replace_failure_cleans_temporary_file(self):
         with mock.patch.object(daily_report.os, "replace", side_effect=OSError("fail")):
