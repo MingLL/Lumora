@@ -61,7 +61,11 @@ dev1 上的 `daily-report.py` 每小时从 `lumora-web` nginx Pod 收集访问�
 - 使用 Python 标准库发起 HTTPS GET，不新增第三方依赖；
 - 单次请求超时 3 秒；
 - 不做自动重试；
-- 只读取国家名称、region、city、isp 字段；
+- 按以下规则把接口响应映射到统一结构：`country.long_name -> country`、顶层
+  `region -> region`、顶层 `city -> city`、顶层 `isp -> isp`；
+- 每个目标字段仅接受字符串。单个字段缺失、为空或类型错误时将该字段规范化为
+  空字符串，并保留其他有效字段；只要四个目标字段中至少一个有效，结果就是 `ok`；
+- 如果响应不是 JSON 对象，或者四个目标字段全部无效，则结果为 `unavailable`；
 - 忽略经纬度、邮编等本需求不需要的数据；
 - HTTP 错误、超时、DNS 错误、JSON 无效或响应结构不符合预期时，返回 `unavailable`；
 - 单个查询失败不影响其余 IP 查询，更不能阻止日报生成或发送。
