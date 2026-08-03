@@ -367,6 +367,19 @@ def summarize(entries):
         for p, n in top
     ]
 
+    visitor_rows = {}
+    for e in pages:
+        row = visitor_rows.setdefault(e["ip"], {"ip": e["ip"], "hits": 0, "paths": set()})
+        row["hits"] += 1
+        row["paths"].add(e["path"])
+    stats["top_visitors"] = sorted(
+        [
+            {"ip": row["ip"], "hits": row["hits"], "paths": len(row["paths"])}
+            for row in visitor_rows.values()
+        ],
+        key=lambda row: (-row["hits"], row["ip"]),
+    )[:3]
+
     ref_kinds = Counter()
     ref_detail = Counter()
     for e in pages:
