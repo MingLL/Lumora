@@ -69,11 +69,12 @@ export const timeline = [
   }
 ];
 
+// cover 从该城市文章里挑一张自己拍的照片；留空则回落到 CityCard 的生成封面
 export const cities = [
-  { name: '北京', description: '待了三年的地方' },
-  { name: '宁波', description: '海定则波宁' },
-  { name: '青岛', description: '路是起伏的，海是辽阔的' },
-  { name: '西安', description: '毕业旅行的第一站' },
-  { name: '福州', description: '大学四年，离家两千公里' },
-  { name: '宁夏', description: '老家' }
+  { name: '北京', description: '待了三年的地方', cover: '/images/posts/ni-hao-beijing/cover.webp' },
+  { name: '宁波', description: '海定则波宁', cover: '/images/posts/city-ningbo/cover.webp' },
+  { name: '青岛', description: '路是起伏的，海是辽阔的', cover: '/images/posts/street-2023-01-08/01.webp' },
+  { name: '西安', description: '毕业旅行的第一站', cover: '' },
+  { name: '福州', description: '大学四年，离家两千公里', cover: '' },
+  { name: '宁夏', description: '老家', cover: '' }
 ];

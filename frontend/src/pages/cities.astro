@@ -24,7 +24,13 @@ const pending = cityGroups.filter((city) => city.posts.length === 0);
     </div>
     <div class="mt-10 grid gap-5 md:grid-cols-2 lg:grid-cols-3">
       {written.map((city, index) => (
-        <CityCard name={city.name} description={city.description} posts={city.posts} index={index} />
+        <CityCard
+          name={city.name}
+          description={city.description}
+          posts={city.posts}
+          cover={city.cover || city.posts.find((post) => post.data.cover)?.data.cover || ''}
+          index={index}
+        />
       ))}
     </div>
 

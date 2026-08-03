@@ -5,12 +5,13 @@ interface Props {
   name: string;
   description: string;
   posts: CollectionEntry<'blog'>[];
+  cover?: string;
   index?: number;
 }
 
-const { name, description, posts, index = 0 } = Astro.props;
+const { name, description, posts, cover = '', index = 0 } = Astro.props;
 
-// 每座城市一组渐变停靠色，避免六张卡片用同一张生成封面
+// 没有指定封面时才走生成图：每座城市一组渐变停靠色，避免几张卡片用同一张
 const palettes = [
   ['#CFA57F', '#A8643E', '#5E6B65', '#2F3130'], // 黄昏土黄
   ['#A8B6B0', '#6E8A85', '#47606B', '#26302F'], // 海雾青
@@ -26,6 +27,21 @@ const skyline = skylineVariants[index % skylineVariants.length];
 ---
 
 <article class="editorial-card group overflow-hidden rounded-[6px] p-4 transition duration-300 hover:-translate-y-1 hover:shadow-soft">
+  {cover ? (
+    <div class="relative flex aspect-[16/10] items-end overflow-hidden rounded-[3px] p-5">
+      <img
+        class="absolute inset-0 h-full w-full object-cover grayscale-[12%] transition duration-500 group-hover:scale-[1.02] group-hover:grayscale-0"
+        src={cover}
+        alt={`${name}｜${description}`}
+        loading="lazy"
+      />
+      <div class="pointer-events-none absolute inset-x-0 bottom-0 h-3/5 bg-gradient-to-t from-[rgba(28,25,22,0.78)] to-transparent"></div>
+      <div class="relative">
+        <p class="text-xs uppercase tracking-[0.2em] text-white/75">City Chapter</p>
+        <h2 class="mt-2 font-serif text-4xl text-white drop-shadow">{name}</h2>
+      </div>
+    </div>
+  ) : (
   <div
     class="film-frame flex aspect-[16/10] items-end rounded-[3px] p-5"
     style={`--film-c1:${c1};--film-c2:${c2};--film-c3:${c3};--film-c4:${c4}`}
@@ -39,6 +55,7 @@ const skyline = skylineVariants[index % skylineVariants.length];
       <h2 class="mt-2 font-serif text-4xl text-white drop-shadow">{name}</h2>
     </div>
   </div>
+  )}
   <div class="px-1 py-3">
     <p class="text-muted">{description}</p>
     <p class="mt-2 text-sm text-accent">{posts.length} 篇文章</p>
