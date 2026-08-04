@@ -9,7 +9,7 @@
 # 站点是纯静态的，服务器上不需要 Node —— 构建在本地完成，只把 dist/ 推上去。
 set -euo pipefail
 
-HOSTS=(dev1 dev2)
+HOSTS=(dev1)
 CONTROL_HOST=dev1                          # 跑 kubectl 的节点（k3s control-plane）
 SITE_URL=https://lumora.love               # Ingress 按 host 匹配，用 IP 探测拿到的永远是 404
 REMOTE_DIR=/opt/lumora/site

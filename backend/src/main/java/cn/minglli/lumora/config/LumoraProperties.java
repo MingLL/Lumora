@@ -30,6 +30,9 @@ public class LumoraProperties {
     @NotBlank(message = "WECHAT_AES_KEY must not be blank")
     private String wechatAesKey;
 
+    @NotBlank(message = "WECHAT_APP_SECRET must not be blank")
+    private String wechatAppSecret;
+
     @NotBlank(message = "MYSQL_HOST must not be blank")
     private String mysqlHost;
 
@@ -108,6 +111,14 @@ public class LumoraProperties {
 
     public void setWechatAesKey(String wechatAesKey) {
         this.wechatAesKey = wechatAesKey;
+    }
+
+    public String getWechatAppSecret() {
+        return wechatAppSecret;
+    }
+
+    public void setWechatAppSecret(String wechatAppSecret) {
+        this.wechatAppSecret = wechatAppSecret;
     }
 
     public String getMysqlHost() {

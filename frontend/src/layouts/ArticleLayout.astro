@@ -20,7 +20,16 @@ const stamp = (date: Date) =>
 const minutes = Math.max(1, Math.round((post.body ?? '').replace(/\s/g, '').length / 320));
 ---
 
-<SiteLayout title={post.data.title} description={post.data.description} image={post.data.cover || undefined}>
+<SiteLayout
+  title={post.data.title}
+  description={post.data.description}
+  image={post.data.cover || undefined}
+  type="article"
+  date={post.data.date}
+  author={site.author}
+  section={post.data.category}
+  tags={post.data.tags}
+>
   <article class="container-page pb-20 pt-9 md:pt-12">
     <div class="mx-auto max-w-[720px]">
       {/* 默认回归档；有同源来路时改为回到进入这篇文章的那一页 */}
@@ -139,5 +148,39 @@ const minutes = Math.max(1, Math.round((post.body ?? '').replace(/\s/g, '').leng
         /* referrer 不是合法 URL 时保持默认 */
       }
     }
+  </script>
+  <script is:inline src="https://res.wx.qq.com/open/js/jweixin-1.6.0.js"></script>
+  <script>
+    (function () {
+      const wx = (window as any).wx;
+      if (!wx) return;
+      const url = location.href.split('#')[0];
+      fetch(`/wechat/callback/jsapi-signature?url=${encodeURIComponent(url)}`)
+        .then((res) => {
+          if (!res.ok) throw new Error(`HTTP ${res.status}`);
+          return res.json();
+        })
+        .then((data: any) => {
+          wx.config({
+            debug: false,
+            appId: data.appId,
+            timestamp: data.timestamp,
+            nonceStr: data.nonceStr,
+            signature: data.signature,
+            jsApiList: ['updateAppMessageShareData', 'updateTimelineShareData']
+          });
+          wx.ready(() => {
+            const shareData = {
+              title: document.title,
+              desc: document.querySelector('meta[name="description"]')?.getAttribute('content') || '',
+              link: url,
+              imgUrl: document.querySelector('meta[property="og:image"]')?.getAttribute('content') || ''
+            };
+            wx.updateAppMessageShareData(shareData);
+            wx.updateTimelineShareData(shareData);
+          });
+        })
+        .catch(() => {});
+    })();
   </script>
 </SiteLayout>

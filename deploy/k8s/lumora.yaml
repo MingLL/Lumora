@@ -1,7 +1,7 @@
 # 远方有温度 —— 静态站点部署清单
 #
-# 站点是纯静态产物，由 nginx 直接 serve。每个节点跑一个 nginx（DaemonSet），
-# 读取本机 /opt/lumora/site 下的文件，所以发布 = 把 dist/ 同步到两台机器。
+# 站点是纯静态产物，由 nginx 直接 serve。只在有公网入口的 dev1 跑 nginx，
+# 读取本机 /opt/lumora/site 下的文件，所以发布只需把 dist/ 同步到 dev1。
 # 对外经由 k3s 自带的 Traefik 暴露在 80 端口。
 ---
 apiVersion: v1
@@ -123,6 +123,8 @@ spec:
         # 清单（含上面的 nginx.conf）变了才滚动重启，只同步静态文件时 pod 不动。
         lumora/manifest-hash: "__MANIFEST_HASH__"
     spec:
+      nodeSelector:
+        kubernetes.io/hostname: dev1
       containers:
         - name: nginx
           # Docker 官方 nginx 的 AWS ECR Public 镜像站
@@ -205,3 +207,29 @@ spec:
                 name: lumora-web
                 port:
                   number: 80
+---
+# lumora.love 的 HTTPS 入口。证书解析器 le-prod 在 k3s 的
+# HelmChartConfig/traefik 中定义；名称必须严格一致，否则 TLS 路由不会加载。
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
+metadata:
+  name: lumora-love-tls
+  namespace: lumora
+spec:
+  entryPoints:
+    - websecure
+  routes:
+    - kind: Rule
+      match: Host(`lumora.love`) && PathPrefix(`/wechat/callback`)
+      priority: 200
+      services:
+        - name: lumora-backend-web
+          port: 8080
+    - kind: Rule
+      match: Host(`lumora.love`)
+      priority: 100
+      services:
+        - name: lumora-web
+          port: 80
+  tls:
+    certResolver: le-prod

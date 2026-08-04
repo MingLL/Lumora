@@ -20,10 +20,9 @@
 ```
 本地  (cd frontend && npm run build)  →  frontend/dist/
         │
-        ├── rsync ──→ dev1:/opt/lumora/site
-        └── rsync ──→ dev2:/opt/lumora/site
+        └── rsync ──→ dev1:/opt/lumora/site
                           │
-              k3s: DaemonSet lumora-web（每节点一个 nginx）
+              k3s: DaemonSet lumora-web（固定在 dev1）
                    hostPath /opt/lumora/site → /usr/share/nginx/html（只读）
                           │
                    Service → Ingress（Traefik）→ :80
@@ -68,34 +67,13 @@ Traefik 是 k3s 自带的，不需要额外装 ingress controller。
 
 `rsync --delete` 保证服务器上的文件与 `frontend/dist/` 严格一致，删掉的页面不会留下孤儿文件。
 
-## 待办：放行 dev2 的 80 端口
-
-目前 **dev2 的公网 80 被阿里云安全组拦截**，dev1 已放行。
-两个节点的 nginx 都健康（集群内访问 dev2 返回 200），只是外网进不来。
-
-在阿里云控制台放行即可：
-
-> ECS 控制台 → 找到 dev2 实例 → 安全组 →
-> 配置规则 → 入方向 → 手动添加：协议 TCP、端口 `80/80`、源 `0.0.0.0/0`
-
-放行后重新跑一次 `./deploy/deploy.sh --skip-build`，两个 IP 都会显示 200。
-
-服务器上装了 aliyun CLI 但没有配置凭证，所以这一步没法用命令行代劳。
-如果之后配好了 AK，也可以用：
-
-```bash
-aliyun ecs AuthorizeSecurityGroup --RegionId cn-heyuan \
-  --SecurityGroupId <安全组ID> --IpProtocol tcp --PortRange 80/80 \
-  --SourceCidrIp 0.0.0.0/0 --Description "lumora http"
-```
-
 ## 接域名
 
 > 已完成：`lumora.love` 已解析到 dev1，Ingress 按 host 匹配，Traefik 用 Let's Encrypt
 > 签发证书（ACME http-01 走 80 端口），80 端口在入口层 301 到 https。
 > 以下步骤保留作换域名时的参考。
 
-1. 域名解析加 A 记录，指向 dev1 的公网 IP（放行 dev2 后可以两个 IP 都加做轮询）。
+1. 域名解析加 A 记录，指向 dev1 的公网 IP（前端只跑在 dev1 上）。
 
 2. 改 `frontend/astro.config.mjs` 的 `site`，这决定 canonical / sitemap / RSS 里的绝对地址：
 
@@ -217,8 +195,36 @@ ssh dev1 '/opt/lumora/bin/daily-report.py report --date 2026-07-27 --dry-run'  #
 - **日志时间是 UTC，统计按 CST。** 容器里没有时区数据，所以 nginx 记的是 UTC，
   脚本负责转换 —— 别看到日志里是 16:00 就以为出错了。
 
-只有 HTML 页面会进统计：nginx 对 `/images/`、`/_astro/`、`/fonts/` 都关了 access_log，
-所以 PV 天然就是页面浏览量，不含静态资源。
+nginx 对 `/images/`、`/_astro/`、`/fonts/` 都关了 access_log，所以统计不含
+静态资源，主要反映页面访问；RSS、sitemap、robots.txt 等仍可能被记录和计入。
+
+### 访问最多的访客与归属地
+
+日报会列出访问最多的 3 个访客：只统计非爬虫且 HTTP 状态码为
+200 或 304 的成功请求，按命中数从高到低排序。当前 access log 主要记录页面
+访问，但 RSS、sitemap、robots.txt 等也可能计入。每行显示完整 IP、命中数和不同
+请求路径数。
+
+归属地默认通过 HTTPS 查询 `ipinfo.is`，显示国家/地区、省州、城市和 ISP。
+每份日报最多向该服务披露 3 个尚未缓存的公网 IP；内网、保留或其他
+非公网地址不会发送给外部服务。单次查询超时为 3 秒，超时、网络错误或
+响应异常时只标记“归属地暂不可用”，不会阻断其余日报生成或发送。
+三个未缓存地址依次超时时，最多可为日报增加约 9 秒。
+
+成功的查询结果缓存在 `/var/lib/lumora/geo-cache.json`，有效期为 30 天，
+缓存文件权限为 `0600`。30 天是查询结果的新鲜度期限，不代表到期即从磁盘
+删除；过期条目会在后续查询成功并重写缓存时被清理。
+
+**隐私与安全提示：** 除了每份日报最多向 `ipinfo.is` 披露 3 个未缓存
+的公网 IP，日报还会把完整 IP 及推断的归属地发给 `MAIL_TO` 配置的收件人；
+原始访问归档保留 90 天，其中也包含 IP。请仅配置必要的收件人，并限制邮箱、
+`/var/log/lumora/access-*.log` 归档和归属地缓存的访问权限。运营者应根据适用地区和
+业务情况评估隐私告知、同意及其他合规义务。
+
+> **未来设计，尚未实现：** 如果需要完全离线的 IP 归属地查询，计划以
+> `GEO_PROVIDER` 作为在线/离线 provider 的选择边界，增加 MaxMind GeoLite2
+> MMDB provider，并由独立的定时更新流程下载和原子替换 MMDB 数据库。当前版本
+> 没有 `GEO_PROVIDER`、GeoLite2 MMDB 读取或数据库更新能力。
 
 ### 排查日报
 
@@ -268,9 +274,13 @@ ssh dev1 'k3s kubectl delete ns lumora'
 | 角色 | 副本 | 后台任务 | 内部发送 | 公网 |
 |---|---|---|---|---|
 | `migrate` (Job) | 一次性 | — | — | 无 |
-| `web` | 2 | 全关 | 关 | `/wechat/callback/` |
+| `web` | 1 | 全关 | 关 | `/wechat/callback/` |
 | `worker` | 1 | 全开 | 关 | 无 |
 | `ops` | 1 | 全关 | 开 | 无，仅 ClusterIP |
+
+低内存阶段唯一的 `web` Pod 通过 `nodeSelector` 固定在 `dev1`；`worker`、
+`ops` 和集群内 MySQL 固定在 `dev2`。任一节点不可用时，对应工作负载不会自动
+漂移。三个 Java Deployment 的内存请求为 256 MiB、限制为 512 MiB。
 
 **为什么 worker 是 `strategy: Recreate`**：先停旧的再起新的，保证任一时刻最多一个
 调度实例。数据库租约仍是最终保障，但发布过程不该依赖它兜底。worker 的就绪探针查
