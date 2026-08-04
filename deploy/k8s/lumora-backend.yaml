@@ -92,7 +92,7 @@ spec:
       # 与 Spring 的整数配置 lumora.mysql-port 冲突。服务发现统一走 DNS。
       enableServiceLinks: false
       nodeSelector:
-        kubernetes.io/hostname: dev1
+        kubernetes.io/hostname: dev2
       containers:
         - name: lumora
           image: __IMAGE__
