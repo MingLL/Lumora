@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# 后端发布：本地构建镜像 → 导入两台节点 → 迁移 → 滚动更新
+# 后端发布：本地构建镜像 → 导入后端节点 → 迁移 → 滚动更新
 #
 #   ./deploy/deploy-backend.sh                 用当前 git commit 当镜像 tag
 #   ./deploy/deploy-backend.sh v20260729       指定 tag
@@ -13,8 +13,17 @@
 # k3s 内置 containerd，导入本地 tar 是最省事且不引入新组件的做法。
 set -euo pipefail
 
-HOSTS=(dev1 dev2)
-CONTROL_HOST=dev1
+# 只有真正调度后端 Pod 的节点才需要镜像，控制面故意不在其中。
+#
+# 2026-08-04 17:22 往 dev1 导这个镜像（147 MB）时，解包和 k3s 的 kine(SQLite)
+# 抢同一块盘，kine 单条 INSERT 从毫秒涨到 3.5 秒，apiserver 开始 i/o timeout，
+# kubelet 续不上 node lease，17:32:09 dev1 自判 NotReady，kubelet 顺手重启了
+# 它管的 Pod —— 其中包括 Traefik（唯一入口），整站断了几分钟，dev2 也因为
+# 到 supervisor 的隧道断开跟着 NotReady。dev1 上根本不跑后端 Pod，这份 I/O
+# 是纯浪费。三周的 journal 里 NotReady 只出现过两次，两次都在 import 期间。
+IMAGE_HOSTS=(dev2)
+BACKEND_NODE=dev2                          # 三个 Deployment、迁移 Job、schema-smoke 都钉在这里
+CONTROL_HOST=dev1                          # 跑 kubectl 的节点（k3s control-plane），不导镜像
 NAMESPACE=lumora
 SITE_URL=https://lumora.love                # Ingress 按 host 匹配，探测必须带对域名才有意义
 REMOTE_ENV=/opt/lumora/backend/.env        # 服务器上的凭据，不进 git，脚本只读不写
@@ -49,7 +58,9 @@ TAR="lumora-backend-$tag.tar"
 
 step "预检"
 command -v docker >/dev/null || fail "本地没有 docker"
-for h in "${HOSTS[@]}"; do
+# 控制面要跑 kubectl，后端节点要收镜像，两边都得连得上。去重是因为
+# 将来若把后端挪回控制面，两个变量会指向同一台，不该检查两次。
+for h in $(printf '%s\n' "$CONTROL_HOST" "${IMAGE_HOSTS[@]}" | awk '!seen[$0]++'); do
   ssh -o BatchMode=yes -o ConnectTimeout=10 "$h" true 2>/dev/null || fail "连不上 $h"
   info "$h ✓"
 done
@@ -70,12 +81,14 @@ fi
 step "校验镜像"
 bash backend/deploy/verify-packaging.sh "$IMAGE"
 
-step "分发镜像 → ${HOSTS[*]}"
+step "分发镜像 → ${IMAGE_HOSTS[*]}"
 docker save "$IMAGE" -o "/tmp/$TAR"
-for h in "${HOSTS[@]}"; do
+for h in "${IMAGE_HOSTS[@]}"; do
   printf '    %s ' "$h"
   scp -q "/tmp/$TAR" "$h:$REMOTE_TMP/$TAR"
-  ssh "$h" "sudo $K3S ctr images import '$REMOTE_TMP/$TAR' >/dev/null && rm -f '$REMOTE_TMP/$TAR'"
+  # ionice -c3（idle）+ nice -n19：解包只在磁盘和 CPU 空闲时推进。即使将来
+  # 后端挪回控制面，也不至于把 kine 的写入拖到超时 —— 见文件头 IMAGE_HOSTS 的注释。
+  ssh "$h" "sudo ionice -c3 nice -n19 $K3S ctr images import '$REMOTE_TMP/$TAR' >/dev/null && rm -f '$REMOTE_TMP/$TAR'"
   printf '✓\n'
 done
 rm -f "/tmp/$TAR"
@@ -101,9 +114,12 @@ fi
 info "迁移完成"
 
 step "校验新旧镜像都能用迁移后的库"
+# nodeSelector 不能省：镜像只在 BACKEND_NODE 上，而 imagePullPolicy 默认对
+# 带 tag 的镜像是 IfNotPresent，集群又没有可用 registry。不钉节点的话调度器
+# 可能把它放到控制面，然后卡在 ImagePullBackOff 而不是真的校验了什么。
 ssh "$CONTROL_HOST" "sudo $K3S kubectl -n '$NAMESPACE' run lumora-smoke-$tag \
     --image='$IMAGE' --restart=Never --rm -i --quiet \
-    --overrides='{\"spec\":{\"enableServiceLinks\":false,\"containers\":[{\"name\":\"smoke\",\"image\":\"$IMAGE\",\"env\":[{\"name\":\"LUMORA_MODE\",\"value\":\"schema-smoke\"}],\"envFrom\":[{\"secretRef\":{\"name\":\"lumora-env\"}}]}]}}' \
+    --overrides='{\"spec\":{\"nodeSelector\":{\"kubernetes.io/hostname\":\"$BACKEND_NODE\"},\"enableServiceLinks\":false,\"containers\":[{\"name\":\"smoke\",\"image\":\"$IMAGE\",\"env\":[{\"name\":\"LUMORA_MODE\",\"value\":\"schema-smoke\"}],\"envFrom\":[{\"secretRef\":{\"name\":\"lumora-env\"}}]}]}}' \
     " >/dev/null || fail "schema-smoke 失败：候选镜像读不了迁移后的库"
 info "schema-smoke 通过"
 

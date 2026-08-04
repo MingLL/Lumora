@@ -26,6 +26,12 @@ spec:
         role: migrate
     spec:
       restartPolicy: Never
+      # 必须和应用 Pod 待在同一个节点：镜像只分发到 dev2（控制面不导后端镜像，
+      # 原因见 deploy-backend.sh 里 IMAGE_HOSTS 的注释），而上面是
+      # imagePullPolicy: IfNotPresent、集群也没有可用 registry。不钉节点的话
+      # 调度器可能把迁移放到 dev1，然后卡在 ImagePullBackOff，整个发布停在第 5 步。
+      nodeSelector:
+        kubernetes.io/hostname: dev2
       # 避免 Service/lumora-mysql 注入 LUMORA_MYSQL_PORT=tcp://...，
       # 覆盖应用期望的整数 MYSQL_PORT。
       enableServiceLinks: false

@@ -193,18 +193,10 @@ web_replicas=$(
   && ok "低内存集群默认只运行一个 Web 副本" \
   || no "Web 副本数是 ${web_replicas:-未找到}，预期为 1"
 
-web_node=$(
-  awk '
-    $0 == "kind: Deployment" { deployment = 1; web = 0; next }
-    deployment && $0 == "  name: lumora-backend-web" { web = 1; next }
-    web && $1 == "kubernetes.io/hostname:" { print $2; exit }
-  ' "$TEST_ROOT/deploy/k8s/lumora-backend.yaml"
-)
-[[ "$web_node" == "dev1" ]] \
-  && ok "Web Pod 固定调度到 dev1" \
-  || no "Web Pod 调度节点是 ${web_node:-未指定}，预期为 dev1"
-
-for role in worker ops; do
+# 三种角色都必须落在 dev2。这不只是资源摆放——镜像只分发到 dev2（控制面
+# 不导后端镜像，见 deploy-backend.sh 的 IMAGE_HOSTS），任何一个角色跑到 dev1
+# 都会卡在 ImagePullBackOff。改节点必须同时改 IMAGE_HOSTS，下面的用例会一起验。
+for role in web worker ops; do
   role_node=$(
     awk -v target="lumora-backend-${role}" '
       $0 == "kind: Deployment" { deployment = 1; matched = 0; next }
@@ -216,6 +208,35 @@ for role in worker ops; do
     && ok "${role} Pod 固定调度到 dev2" \
     || no "${role} Pod 调度节点是 ${role_node:-未指定}，预期为 dev2"
 done
+
+migrate_node=$(
+  awk '$1 == "kubernetes.io/hostname:" { print $2; exit }' \
+    "$TEST_ROOT/deploy/k8s/lumora-backend-migrate.yaml"
+)
+[[ "$migrate_node" == "dev2" ]] \
+  && ok "迁移 Job 钉在有镜像的 dev2" \
+  || no "迁移 Job 调度节点是 ${migrate_node:-未指定}，预期为 dev2（否则 ImagePullBackOff）"
+
+# dev2 物理内存 1870Mi，上面跑 web/worker/ops 加集群内 MySQL。limits 合计一旦
+# 明显超过物理内存，四个容器同时冲顶就会惊动内核 OOM killer —— 它不看 limits
+# 挑谁杀，很可能连 MySQL 一起带走。收紧后最坏是单个 Pod 被 OOMKill 再拉起。
+mem_budget=1920
+mem_limits_total=$(
+  awk '
+    /^ *limits:/    { in_limits = 1; next }
+    /^ *requests:/  { in_limits = 0 }
+    in_limits && $1 == "memory:" {
+      v = $2
+      if (v ~ /Gi$/) { sub(/Gi$/, "", v); total += v * 1024 }
+      else           { sub(/Mi$/, "", v); total += v }
+      in_limits = 0
+    }
+    END { print total + 0 }
+  ' "$TEST_ROOT/deploy/k8s/lumora-backend.yaml" "$TEST_ROOT/deploy/k8s/lumora-mysql.yaml"
+)
+(( mem_limits_total <= mem_budget )) \
+  && ok "dev2 上四个容器 limits 合计 ${mem_limits_total}Mi，未超出 ${mem_budget}Mi 预算" \
+  || no "limits 合计 ${mem_limits_total}Mi 超出 ${mem_budget}Mi（节点只有 1870Mi），内核 OOM 风险"
 
 service_links_disabled=$(
   grep -h -c "enableServiceLinks: false" \
@@ -246,7 +267,24 @@ grep -q "k3s ctr images import" "$CALLS" \
   || no "没有走 ctr import"
 
 imports=$(grep -c "k3s ctr images import" "$CALLS")
-[[ "$imports" == "2" ]] && ok "两台节点都导入了镜像" || no "只有 $imports 台节点导入了镜像"
+[[ "$imports" == "1" ]] \
+  && ok "镜像只导入真正跑后端 Pod 的节点" \
+  || no "导入了 ${imports} 次，预期 1 次（只有 dev2）"
+
+# 2026-08-04 17:22 的事故：往控制面导 147MB 镜像，解包跟 kine(SQLite) 抢盘，
+# INSERT 慢到 3.5s → apiserver i/o timeout → node lease 续不上 → dev1 NotReady
+# → kubelet 重启 Traefik → 整站断。dev1 上根本不跑后端 Pod，这份 I/O 是白付的。
+if grep "ctr images import" "$CALLS" | grep -q "^ssh dev1 "; then
+  no "镜像被导入了控制面 dev1，会跟 kine 抢盘（重演 2026-08-04 的 NotReady）"
+else
+  ok "控制面 dev1 完全不接触后端镜像"
+fi
+
+if grep "ctr images import" "$CALLS" | grep -q "ionice -c3 nice -n19"; then
+  ok "镜像解包降到 idle I/O + 最低 CPU 优先级"
+else
+  no "ctr import 没有 ionice/nice 兜底，磁盘一忙就可能拖垮 kine"
+fi
 
 grep -q "from-env-file" "$CALLS" \
   && ok "Secret 从服务器上的 .env 生成，值不经过本地" \
@@ -267,6 +305,14 @@ if grep "schema-smoke" "$CALLS" | grep -q '"enableServiceLinks":false'; then
   ok "临时 schema-smoke Pod 禁用 Service Links"
 else
   no "临时 schema-smoke Pod 未禁用 Service Links"
+fi
+
+# 不钉节点的话调度器可能把它放到没有镜像的 dev1，结果是 ImagePullBackOff，
+# 而不是「候选镜像读不了迁移后的库」——错误信息会指向完全错误的方向。
+if grep "schema-smoke" "$CALLS" | grep -q '"nodeSelector":{"kubernetes.io/hostname":"dev2"}'; then
+  ok "临时 schema-smoke Pod 钉在有镜像的 dev2"
+else
+  no "schema-smoke Pod 没钉到 dev2，可能调度到没有镜像的节点"
 fi
 
 printf '\n--- 不泄密 ---\n'

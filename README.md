@@ -61,7 +61,7 @@ mvn -DskipTests package
 
 ```bash
 ./deploy/deploy.sh           # 前端：构建 + 同步到两台服务器 + 应用 k8s 清单
-./deploy/deploy-backend.sh   # 后端：构建镜像 + 导入两个节点 + 迁移 + 滚动更新
+./deploy/deploy-backend.sh   # 后端：构建镜像 + 导入 dev2 + 迁移 + 滚动更新
 ```
 
 都在仓库根目录执行，脚本自己会进各自的子目录。两者共用同一套 k3s 和 `lumora`

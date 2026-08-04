@@ -4,8 +4,10 @@
 # MYSQL_HOST 指过去就行，后端不关心数据库跑在哪。
 #
 # 用了这个文件的话：
-#   - 数据落在 dev1 的 /opt/lumora/mysql，用 nodeSelector 钉死在 dev1，
+#   - 数据落在 __MYSQL_NODE__ 的 /opt/lumora/mysql，用 nodeSelector 钉死在那台，
 #     因为 hostPath 不跟着 pod 漂移，换节点就等于换了一个空库。
+#     线上当前钉在 dev2，实际数据在 dev2:/opt/lumora/mysql —— 备份要认准这台，
+#     dev1 上根本没有这个目录。
 #   - 备份和加密是你的责任，见 backend/README.md 的「Operating the Database」。
 #     hostPath 本身不提供任何加密。
 ---
@@ -78,7 +80,10 @@ spec:
               memory: 512Mi
             limits:
               cpu: "1"
-              memory: 1Gi
+              # 和三个 Java Deployment 合起来不超过 dev2 的物理内存，避免内核
+              # OOM killer 越过 limits 挑中 MySQL。预算表见 lumora-backend.yaml
+              # 文件头；实测 RSS 约 502Mi（默认 innodb buffer pool 128M）。
+              memory: 768Mi
           readinessProbe:
             exec:
               command: ["mysqladmin", "ping", "-h", "127.0.0.1", "--silent"]

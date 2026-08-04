@@ -256,10 +256,38 @@ ssh dev1 'ls /opt/lumora/site | head'
 ssh dev1 'k3s kubectl delete ns lumora'
 ```
 
+### 站点突然整个打不开
+
+先分清是「应用挂了」还是「节点抖了」—— 后者会连 Traefik 一起重启，表现为两台
+同时访问不到，但机器其实一直开着：
+
+```bash
+# 节点有没有 NotReady 过（2026-08-04 就是这条查出来的）
+ssh dev1 'journalctl -u k3s --since "today" | grep "Node became not ready"'
+
+# 控制面数据库是不是被 I/O 拖慢了（正常应该一条都没有）
+ssh dev1 'journalctl -u k3s --since "today" | grep -c "Slow SQL"'
+
+# 机器到底重启没有：uptime 还在就说明是 k3s 层面的问题，不是宕机
+ssh dev1 uptime; ssh dev2 uptime
+
+# 被重启的 Pod 是 OOMKilled 还是 Completed（后者说明是节点抖动带走的）
+ssh dev1 'k3s kubectl get pod -A -o json | jq -r ".items[]|select(.status.containerStatuses[]?.lastState.terminated)|\"\(.metadata.name) \(.status.containerStatuses[0].lastState.terminated.reason)\""'
+```
+
 ## 变更记录
 
 - 集群里原有的 `k8s-demo` 命名空间已删除（本次部署前确认不再需要），
   清单备份在 dev1 的 `/root/k8s-demo-backup-20260726.yaml`，需要时可 `kubectl apply` 恢复。
+
+- **2026-08-04：发布后端把控制面压垮，站点断了几分钟。** 17:22 往 dev1 导镜像 →
+  解包跟 kine(SQLite) 抢盘 → INSERT 慢到 3.5s → apiserver `i/o timeout` →
+  kubelet 续不上 node lease → 17:32:09 dev1 `NotReady` → Traefik 被重启 → 断站；
+  dev2 隧道断开跟着 `NotReady`，17:37 两台恢复。机器没重启，也不是 OOM
+  （被重启的 Pod 全是 `Completed exit=0`）。修法：镜像不再导给控制面
+  （`IMAGE_HOSTS=(dev2)`）、import 加 `ionice -c3 nice -n19`、迁移 Job 和
+  schema-smoke Pod 钉到 dev2、dev2 的 limits 从 136% 收到贴合节点容量。
+  契约测试新增 6 条断言锁住这些性质。
 
 ## 后端发布
 
@@ -278,9 +306,25 @@ ssh dev1 'k3s kubectl delete ns lumora'
 | `worker` | 1 | 全开 | 关 | 无 |
 | `ops` | 1 | 全关 | 开 | 无，仅 ClusterIP |
 
-低内存阶段唯一的 `web` Pod 通过 `nodeSelector` 固定在 `dev1`；`worker`、
-`ops` 和集群内 MySQL 固定在 `dev2`。任一节点不可用时，对应工作负载不会自动
-漂移。三个 Java Deployment 的内存请求为 256 MiB、限制为 512 MiB。
+**四种角色全部通过 `nodeSelector` 固定在 `dev2`** —— 三个 Deployment、迁移 Job，
+以及 `deploy-backend.sh` 里那个临时的 schema-smoke Pod。集群内 MySQL 也在 dev2。
+任一节点不可用时，对应工作负载不会自动漂移。
+
+把后端整体压在 agent 节点上，是为了让控制面 `dev1` 只干控制面的事：镜像因此
+只分发到 dev2（见[镜像怎么上服务器](#镜像怎么上服务器)），dev1 的磁盘不用在发布时
+陪着解包 147 MB 的 tar。代价是**改节点必须三处一起改** —— `lumora-backend.yaml`
+的 `nodeSelector`、`lumora-backend-migrate.yaml` 的 `nodeSelector`、
+`deploy-backend.sh` 的 `IMAGE_HOSTS`/`BACKEND_NODE`。漏改任何一处，Pod 会调度到
+没有镜像的机器上卡在 `ImagePullBackOff`（`imagePullPolicy: IfNotPresent` 加上
+集群没有可用 registry）。契约测试锁住了这几处的一致性。
+
+内存预算按 dev2 的 1870 MiB 物理内存算：三个 Java Deployment 各 requests
+256 MiB / limits 384 MiB，MySQL requests 512 MiB / limits 768 MiB，limits 合计
+1920 MiB。**limits 之和必须贴着节点容量**，否则四个容器同时冲顶会触发内核
+OOM killer —— 它不看 limits 挑谁杀，很可能连 MySQL 一起带走；收紧之后最坏
+情况是单个 Pod 被 OOMKill 再由 Deployment 拉起。改这些数字前先看
+`kubectl -n lumora top pod`（当前实测 RSS：web/worker/ops 约 178～215 MiB，
+MySQL 约 502 MiB），JVM 堆按 `-XX:MaxRAMPercentage=75.0` 跟着 limits 走。
 
 **为什么 worker 是 `strategy: Recreate`**：先停旧的再起新的，保证任一时刻最多一个
 调度实例。数据库租约仍是最终保障，但发布过程不该依赖它兜底。worker 的就绪探针查
@@ -301,9 +345,17 @@ scp backend/.env.example dev1:/tmp/env && ssh dev1 \
 校验：`ssh dev1 'cd /opt/lumora/backend && bash -s' < backend/deploy/check-env.sh`
 
 数据库：如果已有 MySQL，把 `.env` 的 `MYSQL_HOST` 指过去即可。没有的话用
-`deploy/k8s/lumora-mysql.yaml`（把 `__MYSQL_NODE__` 换成节点名再 apply），
-注意它用 hostPath 存在 dev1 的 `/opt/lumora/mysql`，备份和加密要自己安排，
-见 [backend/README.md](../backend/README.md) 的 Operating the Database。
+`deploy/k8s/lumora-mysql.yaml`（把 `__MYSQL_NODE__` 换成节点名再 apply）。
+它用 hostPath，**线上当前跑在 dev2，数据在 `dev2:/opt/lumora/mysql`**（dev1 上
+没有这个目录）；hostPath 不跟着 pod 漂移，换节点就等于换了一个空库。备份和加密
+要自己安排，见 [backend/README.md](../backend/README.md) 的 Operating the Database。
+
+注意两个发布脚本都**不会** apply 这份清单，改了它要手动执行：
+
+```bash
+sed 's/__MYSQL_NODE__/dev2/' deploy/k8s/lumora-mysql.yaml \
+  | ssh dev1 'cat > /tmp/mysql.yaml && sudo /usr/local/bin/k3s kubectl apply -f /tmp/mysql.yaml'
+```
 
 ### 镜像怎么上服务器
 
@@ -311,13 +363,25 @@ scp backend/.env.example dev1:/tmp/env && ssh dev1 \
 `docker save` → `scp` → `k3s ctr images import`。构建时固定 `--platform linux/amd64`
 （本地可能是 arm64 Mac）。
 
+**只导 `dev2`，不导控制面。** 由 `deploy-backend.sh` 的 `IMAGE_HOSTS` 控制。
+2026-08-04 17:22 那次发布往 dev1 也导了一份：解包和 k3s 的 kine（SQLite，跟镜像
+在同一块盘）抢 I/O，kine 单条 INSERT 从毫秒涨到 3.5 秒，apiserver 开始
+`i/o timeout`，kubelet 续不上 node lease，17:32:09 dev1 自判 `NotReady`，kubelet
+顺手重启了它管的 Pod —— 其中包括 Traefik（唯一入口），站点断了几分钟；dev2 也
+因为到 supervisor 的隧道断开跟着 `NotReady`。dev1 上根本不跑后端 Pod，那份 I/O
+是纯浪费。三周的 journal 里 `Node became not ready` 只出现过两次，两次都在
+`ctr images import` 期间。
+
+即便如此，import 仍然带 `ionice -c3 nice -n19`（idle I/O + 最低 CPU 优先级）：
+将来若有人把某个角色挪回控制面，这层兜底还在。
+
 ### 发布顺序
 
 脚本严格按这个顺序走，任何一步失败都不会动到正在服务的 pod：
 
-1. 预检两台机器可达、`.env` 存在且权限 600
+1. 预检控制面和后端节点可达、`.env` 存在且权限 600
 2. 构建 + `verify-packaging.sh`（非 root 用户、镜像里没有密钥形状的值）
-3. 分发镜像到两个节点
+3. 分发镜像到后端节点（只有 dev2）
 4. 从服务器 `.env` 刷新 `Secret/lumora-env`
 5. 跑迁移 Job，**等它完成**
 6. `schema-smoke` 确认候选镜像能用迁移后的库

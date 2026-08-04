@@ -9,6 +9,22 @@
 #
 # 凭据不在本文件里。deploy/deploy-backend.sh 从服务器上的 .env 生成
 # Secret/lumora-env，本文件只引用它。
+#
+# 内存预算（三个 Deployment 加 MySQL 全在 dev2，物理内存 1870 Mi）：
+#
+#   web / worker / ops   requests 256Mi   limits 384Mi   ×3
+#   lumora-mysql         requests 512Mi   limits 768Mi        （见 lumora-mysql.yaml）
+#   ─────────────────────────────────────────────────────
+#   合计                 requests 1280Mi  limits 1920Mi
+#
+# limits 之前是 512Mi×3 + 1Gi = 2560Mi，占节点 136%：四个容器同时冲到上限
+# 就会触发内核 OOM killer，而它挑谁杀不看 limits，很可能连 MySQL 一起带走。
+# 收到 384Mi 后总量落回节点容量附近，最坏情况变成单个 Pod 被 OOMKill、
+# 由 Deployment 拉起，而不是整个节点崩掉。
+#
+# 384Mi 对 JVM 是够的：Dockerfile 设 -XX:MaxRAMPercentage=75.0，堆上限
+# 288Mi，非堆约 96Mi；三个进程实测 RSS 是 178 / 185 / 215 Mi。改这个数之前
+# 先看 `kubectl -n lumora top pod`，别让实测值贴到上限。
 ---
 apiVersion: v1
 kind: Service
@@ -121,7 +137,7 @@ spec:
               memory: 256Mi
             limits:
               cpu: "1"
-              memory: 512Mi
+              memory: 384Mi
           startupProbe:
             httpGet:
               path: /actuator/health/liveness
@@ -201,7 +217,7 @@ spec:
               memory: 256Mi
             limits:
               cpu: "1"
-              memory: 512Mi
+              memory: 384Mi
           readinessProbe:
             # WorkerReadinessVerifier 校验通过（模式对、数据库通、三个定时任务
             # 都注册了）才会写这个文件。"进程起来了" 不等于 "在干活"。
@@ -273,7 +289,7 @@ spec:
               memory: 256Mi
             limits:
               cpu: "1"
-              memory: 512Mi
+              memory: 384Mi
           readinessProbe:
             httpGet:
               path: /actuator/health/readiness
