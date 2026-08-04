@@ -50,22 +50,47 @@ plus a local HTTPS tunnel - no production environment needed:
    ```bash
    docker build -t lumora:local .
    ```
-2. `cp .env.dev.example .env` and fill in the test account values.
-3. Start the local stack (callback container only, no mail-sending worker):
+2. `cp .env.dev.example .env`, then fill in `WECHAT_APP_ID` from the test
+   account page. Leave `WECHAT_ORIGINAL_ID` empty for now - step 4 captures it.
+   The test account also shows an appSecret; this service never calls WeChat's
+   outbound APIs, so there is nowhere to put it and nothing needs it.
+3. Start the helper that captures the original ID, then expose it publicly.
+   Both scripts live at the repo root, not under `backend/`:
+   ```bash
+   ../scripts/dev-wechat-original-id.py     # holds port 8080
+   ../scripts/dev-wechat-tunnel.sh          # another terminal
+   ```
+4. In the test account backend, set the callback URL to
+   `https://…trycloudflare.com/wechat/callback/{WECHAT_APP_ID}`, set Token to
+   your `WECHAT_TOKEN`, and pick **plaintext mode** - the helper does not
+   decrypt. Submit, then scan the test account QR code to follow it. The
+   `subscribe` push prints the `gh_…` original ID; put it in `.env` and stop
+   the helper with Ctrl-C.
+5. Bring up the real stack. The tunnel keeps running and starts serving the
+   `web` container instead of the helper, so the callback URL stays valid:
    ```bash
    docker compose --profile migrate up migrate
    docker compose up -d web
    ```
-4. In another terminal, expose it publicly:
-   ```bash
-   ./scripts/dev-wechat-tunnel.sh
-   ```
-5. Paste the printed `https://…trycloudflare.com/wechat/callback/{WECHAT_APP_ID}`
-   into the test account backend as the callback URL, and set the matching
-   Token / EncodingAESKey.
+
+To confirm the whole path works, unfollow and re-follow the test account, then
+check the events landed:
+
+```bash
+docker compose exec mysql mysql -ulumora -plumora lumora \
+  -e "SELECT id, event_type, raw_event, original_occurred_at FROM wechat_event ORDER BY id;"
+```
+
+Sending a chat message proves nothing here - `WechatEventNormalizer` only
+accepts `MsgType=event`, so plain text is acknowledged and dropped without a
+row or an INFO log. Use follow, unfollow, QR scans and menu clicks instead.
 
 The `web` container already forces every `*_ENABLED` flag off, so a local
 instance never sends mail or runs scheduled jobs.
+
+The quick tunnel's hostname is random and dies with the process, so every
+session needs the callback URL reconfigured. A Cloudflare account plus a named
+tunnel gets you a stable address if that churn becomes annoying.
 
 ## Configuration
 
@@ -89,7 +114,7 @@ startup naming the missing variable. See `.env.example` for the full list.
 | `MAIL_AUTH_CODE` | — | QQ email authorization code (not the account password) |
 | `MAIL_FROM_NAME` | `Lumora` | Display name on outgoing mail |
 | `REPORT_RECIPIENTS` | — | Comma-separated report recipients |
-| `REPORT_ADMIN_KEY` | — | Key for `X-Lumora-Admin-Key` on `/internal/**` |
+| `REPORT_ADMIN_KEY` | — | Key for `X-Lumora-Admin-Key` on `/internal/**`; those routes also require `X-Request-Id` (see below) |
 | `LUMORA_ZONE` | `Asia/Shanghai` | Zone for report dates, schedules and mail timestamps |
 | `SCHEDULING_ENABLED` | `true` | Registers the 07:00 daily report job |
 | `REPORT_RECOVERY_ENABLED` | `true` | Registers the stale-delivery recovery job |
@@ -103,6 +128,33 @@ startup naming the missing variable. See `.env.example` for the full list.
 The four `*_ENABLED` flags exist so a candidate container can serve callbacks
 without competing for background work or sending mail. Turn them off on every
 instance except the single active worker.
+
+## Manual Report Delivery
+
+`POST /internal/reports/{date}/send` regenerates and re-sends a day's report.
+Two headers are mandatory, and `AdminKeyInterceptor` checks them in this order:
+
+```bash
+curl -X POST http://127.0.0.1:8081/internal/reports/2026-07-29/send \
+     -H "X-Lumora-Admin-Key: $REPORT_ADMIN_KEY" \
+     -H "X-Request-Id: $(uuidgen)"
+```
+
+- Missing or blank `X-Request-Id` → `400`, before the key is ever compared.
+  A correct key does not help; the request id comes first.
+- Missing or wrong `X-Lumora-Admin-Key` → `401`. The comparison is constant
+  time, and a length mismatch still runs a dummy compare so response timing
+  leaks nothing about the expected length.
+- `INTERNAL_SEND_ENABLED=false` → `503`, regardless of headers. This is a
+  separate gate from the key: `web` and `worker` both keep it off, so use the
+  `ops` profile, which enables it and binds to loopback only:
+  ```bash
+  docker compose --profile ops up -d ops
+  ```
+
+Everything under `/internal/**` is covered by the interceptor via a path
+pattern, so new routes there inherit the protection - and anything outside that
+prefix has none.
 
 ## Database Migration
 

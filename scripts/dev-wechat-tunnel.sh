@@ -38,14 +38,17 @@ printf '    Ctrl-C 退出，退出后回调地址立即失效。\n\n'
 # 把输出同时打印到终端和捕获，从中解析分配的公网域名。
 cloudflared tunnel --url "${TARGET}" 2>&1 | while IFS= read -r line; do
   printf '%s\n' "$line"
-  if [[ $line == *"trycloudflare.com"* && -z ${PRINTED+x} ]]; then
+  # 必须同时含 https://，只匹配 trycloudflare.com 会命中 "Requesting new quick
+  # Tunnel on trycloudflare.com..." 那行。加上 || true：grep 匹配不到时退出码 1，
+  # 在 set -e + pipefail 下会直接杀掉这个子 shell，连带 cloudflared 收 SIGPIPE 而死。
+  if [[ $line == *"https://"*"trycloudflare.com"* && -z ${PRINTED+x} ]]; then
     # 行内形如： https://some-words-xxxx.trycloudflare.com
-    host=$(printf '%s' "$line" | grep -oE 'https://[a-z0-9-]+\.trycloudflare\.com' | head -1)
+    host=$(printf '%s' "$line" | grep -oE 'https://[a-z0-9-]+\.trycloudflare\.com' | head -1) || true
     if [[ -n $host ]]; then
       export PRINTED=1
       printf '\n\033[1;32m== 公网回调地址就绪 ==\033[0m\n'
       printf '    隧道:  %s\n' "$host"
-      printf '    回调:  %s/wechat/callback/{你的AppId}\n\n'
+      printf '    回调:  %s/wechat/callback/{你的AppId}\n\n' "$host"
       printf '把上面的「回调」填进微信公众号测试号后台的 URL。\n'
       printf '明文模式只填 Token；安全模式还要填 EncodingAESKey。\n\n'
     fi
