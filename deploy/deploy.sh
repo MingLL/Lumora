@@ -11,7 +11,7 @@ set -euo pipefail
 
 HOSTS=(dev1)
 CONTROL_HOST=dev1                          # 跑 kubectl 的节点（k3s control-plane）
-SITE_IPS=(47.120.54.233)
+SITE_URL=https://lumora.love               # 站点对外域名（含 HTTPS，Traefik 会把 IP/80 301 到这里）
 REMOTE_DIR=/opt/lumora/site
 FRONTEND_DIR=frontend                      # Astro 站点的根，npm 相关的都在里面
 DIST=$FRONTEND_DIR/dist
@@ -55,22 +55,16 @@ step "等待 pod 就绪"
 ssh "$CONTROL_HOST" 'k3s kubectl rollout status daemonset/lumora-web -n lumora --timeout=120s'
 
 step "验证公网访问"
-unreachable=()
-for ip in "${SITE_IPS[@]}"; do
-  # curl 失败时 %{http_code} 本身就输出 000，不要再 || echo 叠加一次
-  code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 10 "http://$ip/" 2>/dev/null || true)
-  if [[ "$code" == "200" ]]; then
-    printf '    http://%-16s → \033[1;32m200\033[0m\n' "$ip"
-  else
-    printf '    http://%-16s → \033[1;31m%s\033[0m\n' "$ip" "${code:-000}"
-    unreachable+=("$ip")
-  fi
-done
-
-if (( ${#unreachable[@]} )); then
-  # pod 已经 rollout 成功了，所以公网不通几乎都是安全组没放行 80，而不是应用问题
-  printf '\n\033[1;33m注意:\033[0m 以下 IP 公网不可达：%s\n' "${unreachable[*]}"
-  printf '      pod 已就绪，通常是阿里云安全组未放行 80 端口入方向。\n'
+# 走域名而不是裸 IP：Traefik 已把 lumora.love 配成 HTTPS，IP 直访 80 会被
+# 301 到 https://lumora.love/，curl 拿到的状态码是 301 而非 200。
+code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 10 "$SITE_URL/" 2>/dev/null || true)
+if [[ "$code" == "200" ]]; then
+  printf '    %-32s -> \033[1;32m200\033[0m\n' "$SITE_URL"
+else
+  printf '    %-32s -> \033[1;31m%s\033[0m\n' "$SITE_URL" "${code:-000}"
+  # pod 已经 rollout 成功了，所以公网不通几乎都是安全组没放行 443，而不是应用问题
+  printf '\n\033[1;33m注意:\033[0m 站点不可达（状态码 %s）。\n' "${code:-000}"
+  printf '      pod 已就绪，通常是阿里云安全组未放行 443 端口入方向，或域名解析未生效。\n'
   printf '      排查：ssh %s "k3s kubectl -n lumora get pod -o wide"\n' "$CONTROL_HOST"
   exit 1
 fi
