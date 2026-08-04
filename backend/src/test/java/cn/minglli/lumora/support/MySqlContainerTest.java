@@ -12,6 +12,7 @@ import org.testcontainers.containers.MySQLContainer;
         "lumora.wechat-original-id=gh_original",
         "lumora.wechat-token=wechat-token",
         "lumora.wechat-aes-key=abcdefghijklmnopqrstuvwxyz0123456789ABCDEFG",
+        "lumora.wechat-app-secret=wechat-app-secret",
         "lumora.mysql-host=localhost",
         "lumora.mysql-port=3306",
         "lumora.mysql-database=lumora",

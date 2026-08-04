@@ -103,6 +103,7 @@ class LumoraPropertiesTest {
         values.put("lumora.wechat-original-id", "gh_original");
         values.put("lumora.wechat-token", "wechat-token");
         values.put("lumora.wechat-aes-key", "abcdefghijklmnopqrstuvwxyz0123456789ABCDEFG");
+        values.put("lumora.wechat-app-secret", "wechat-app-secret");
         values.put("lumora.mysql-host", "localhost");
         values.put("lumora.mysql-port", "3307");
         values.put("lumora.mysql-database", "lumora");
@@ -121,6 +122,7 @@ class LumoraPropertiesTest {
                 Arguments.of("lumora.wechat-original-id", "WECHAT_ORIGINAL_ID"),
                 Arguments.of("lumora.wechat-token", "WECHAT_TOKEN"),
                 Arguments.of("lumora.wechat-aes-key", "WECHAT_AES_KEY"),
+                Arguments.of("lumora.wechat-app-secret", "WECHAT_APP_SECRET"),
                 Arguments.of("lumora.mysql-host", "MYSQL_HOST"),
                 Arguments.of("lumora.mysql-port", "MYSQL_PORT"),
                 Arguments.of("lumora.mysql-database", "MYSQL_DATABASE"),

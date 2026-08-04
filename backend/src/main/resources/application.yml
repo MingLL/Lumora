@@ -38,6 +38,7 @@ lumora:
   wechat-original-id: ${WECHAT_ORIGINAL_ID:}
   wechat-token: ${WECHAT_TOKEN:}
   wechat-aes-key: ${WECHAT_AES_KEY:}
+  wechat-app-secret: ${WECHAT_APP_SECRET:}
   mysql-host: ${MYSQL_HOST:}
   mysql-port: ${MYSQL_PORT:3306}
   mysql-database: ${MYSQL_DATABASE:}
