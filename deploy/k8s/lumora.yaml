@@ -215,6 +215,12 @@ spec:
     - websecure
   routes:
     - kind: Rule
+      match: Host(`lumora.love`) && PathPrefix(`/wechat/callback`)
+      priority: 200
+      services:
+        - name: lumora-backend-web
+          port: 8080
+    - kind: Rule
       match: Host(`lumora.love`)
       priority: 100
       services:
