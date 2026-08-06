@@ -155,6 +155,20 @@ const minutes = Math.max(1, Math.round((post.body ?? '').replace(/\s/g, '').leng
       const wx = (window as any).wx;
       if (!wx) return;
       const url = location.href.split('#')[0];
+      const reportError = (errMsg: string) => {
+        // fire-and-forget；sendBeacon 不阻塞 unload，签名失败也算运维信号
+        const payload = JSON.stringify({ url, errMsg });
+        if (navigator.sendBeacon) {
+          navigator.sendBeacon('/wechat/callback/jsapi-signature/error', new Blob([payload], { type: 'application/json' }));
+        } else {
+          fetch('/wechat/callback/jsapi-signature/error', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: payload,
+            keepalive: true
+          }).catch(() => {});
+        }
+      };
       fetch(`/wechat/callback/jsapi-signature?url=${encodeURIComponent(url)}`)
         .then((res) => {
           if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -169,6 +183,7 @@ const minutes = Math.max(1, Math.round((post.body ?? '').replace(/\s/g, '').leng
             signature: data.signature,
             jsApiList: ['updateAppMessageShareData', 'updateTimelineShareData']
           });
+          wx.error((res: any) => reportError(res?.errMsg ?? 'unknown wx.error'));
           wx.ready(() => {
             const shareData = {
               title: document.title,
@@ -180,7 +195,7 @@ const minutes = Math.max(1, Math.round((post.body ?? '').replace(/\s/g, '').leng
             wx.updateTimelineShareData(shareData);
           });
         })
-        .catch(() => {});
+        .catch((err: any) => reportError(`fetch failed: ${err?.message ?? err}`));
     })();
   </script>
 </SiteLayout>

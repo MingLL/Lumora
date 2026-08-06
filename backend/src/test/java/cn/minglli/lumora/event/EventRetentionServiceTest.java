@@ -40,6 +40,8 @@ class EventRetentionServiceTest {
         verify(mapper).deleteUnreferencedReportsOlderThan(reports.capture());
         ArgumentCaptor<Instant> events = ArgumentCaptor.forClass(Instant.class);
         verify(mapper).deleteEventsOlderThan(events.capture());
-        return List.of(deliveries.getValue(), reports.getValue(), events.getValue());
+        ArgumentCaptor<Instant> jsapiErrors = ArgumentCaptor.forClass(Instant.class);
+        verify(mapper).deleteJsapiSignatureErrorsOlderThan(jsapiErrors.capture());
+        return List.of(deliveries.getValue(), reports.getValue(), events.getValue(), jsapiErrors.getValue());
     }
 }

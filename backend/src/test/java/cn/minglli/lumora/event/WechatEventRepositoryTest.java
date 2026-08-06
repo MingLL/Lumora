@@ -97,6 +97,13 @@ class WechatEventRepositoryTest extends MySqlContainerTest {
                 "created_at", "timestamp(6)|NO|DEFAULT_GENERATED DEFAULT CURRENT_TIMESTAMP(6)",
                 "updated_at", "timestamp(6)|NO|DEFAULT_GENERATED on update CURRENT_TIMESTAMP(6) DEFAULT CURRENT_TIMESTAMP(6)"));
 
+        assertThat(columns("jsapi_signature_error")).containsExactlyEntriesOf(mapOf(
+                "id", "bigint unsigned|NO|auto_increment",
+                "url", "varchar(2048)|NO|",
+                "err_msg", "varchar(1024)|NO|",
+                "received_at", "timestamp(6)|NO|DEFAULT_GENERATED DEFAULT CURRENT_TIMESTAMP(6)",
+                "created_at", "timestamp(6)|NO|DEFAULT_GENERATED DEFAULT CURRENT_TIMESTAMP(6)"));
+
         List<Map<String, Object>> tableOptions = jdbcTemplate.queryForList("""
                 SELECT table_name, engine, table_collation
                 FROM information_schema.tables
@@ -104,11 +111,12 @@ class WechatEventRepositoryTest extends MySqlContainerTest {
                   AND table_name IN (
                       'wechat_event',
                       'daily_report',
-                      'report_delivery_attempt'
+                      'report_delivery_attempt',
+                      'jsapi_signature_error'
                   )
                 ORDER BY table_name
                 """);
-        assertThat(tableOptions).hasSize(3).allSatisfy(options -> {
+        assertThat(tableOptions).hasSize(4).allSatisfy(options -> {
             assertThat(options.get("engine")).isEqualTo("InnoDB");
             assertThat(options.get("table_collation").toString()).startsWith("utf8mb4_");
         });
@@ -130,6 +138,10 @@ class WechatEventRepositoryTest extends MySqlContainerTest {
                 "uq_delivery_id", "UNIQUE:delivery_id",
                 "uq_auto_report", "UNIQUE:auto_report_id",
                 "uq_manual_request", "UNIQUE:report_id,request_id"));
+        assertThat(indexes("jsapi_signature_error")).containsExactlyInAnyOrderEntriesOf(mapOf(
+                "PRIMARY", "UNIQUE:id",
+                "ix_jsapi_error_received_at", "NONUNIQUE:received_at",
+                "ix_jsapi_error_url", "NONUNIQUE:url"));
 
         Map<String, Object> generatedColumn = jdbcTemplate.queryForMap("""
                 SELECT generation_expression, extra

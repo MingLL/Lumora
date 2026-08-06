@@ -32,4 +32,9 @@
         DELETE FROM wechat_event
         WHERE received_at &lt; #{cutoff}
     </delete>
+
+    <delete id="deleteJsapiSignatureErrorsOlderThan">
+        DELETE FROM jsapi_signature_error
+        WHERE received_at &lt; #{cutoff}
+    </delete>
 </mapper>
