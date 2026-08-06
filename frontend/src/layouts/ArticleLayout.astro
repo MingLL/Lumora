@@ -181,18 +181,21 @@ const minutes = Math.max(1, Math.round((post.body ?? '').replace(/\s/g, '').leng
             timestamp: data.timestamp,
             nonceStr: data.nonceStr,
             signature: data.signature,
-            jsApiList: ['updateAppMessageShareData', 'updateTimelineShareData']
+            jsApiList: ['getNetworkType']
           });
           wx.error((res: any) => reportError(res?.errMsg ?? 'unknown wx.error'));
           wx.ready(() => {
-            const shareData = {
-              title: document.title,
-              desc: document.querySelector('meta[name="description"]')?.getAttribute('content') || '',
-              link: url,
-              imgUrl: document.querySelector('meta[property="og:image"]')?.getAttribute('content') || ''
-            };
-            wx.updateAppMessageShareData(shareData);
-            wx.updateTimelineShareData(shareData);
+            // 订阅号没有分享接口权限，用 getNetworkType 验证 JS-SDK 能否工作。
+            // 成功时 console.log 网络类型；失败时上报到后端 jsapi_signature_error 表。
+            wx.getNetworkType({
+              success: (res: any) => {
+                console.log('[wechat-jsapi] getNetworkType ok:', res.networkType);
+              },
+              fail: (err: any) => {
+                console.warn('[wechat-jsapi] getNetworkType failed:', err?.errMsg);
+                reportError(`getNetworkType: ${err?.errMsg ?? 'unknown'}`);
+              }
+            });
           });
         })
         .catch((err: any) => reportError(`fetch failed: ${err?.message ?? err}`));
