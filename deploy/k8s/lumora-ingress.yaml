@@ -39,7 +39,7 @@ spec:
       # 浏览器忽略并报这个警告；站点已是全 HTTPS（HSTS + 80->301），不需要它。
       # 等 CSP 从 Report-Only 切成真正的 Content-Security-Policy 时再加回来。
       # script-src 放行 res.wx.qq.com：文章页加载微信 JS-SDK jweixin-1.6.0.js。
-      Content-Security-Policy-Report-Only: >-
+      Content-Security-Policy: >-
         default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none';
         form-action 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline';
         script-src 'self' 'unsafe-inline' https://res.wx.qq.com; connect-src 'self'

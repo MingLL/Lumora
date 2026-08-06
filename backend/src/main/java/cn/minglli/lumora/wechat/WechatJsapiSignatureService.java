@@ -6,7 +6,6 @@ import java.security.NoSuchAlgorithmException;
 import java.time.Instant;
 import java.util.Map;
 import java.util.UUID;
-import java.util.concurrent.ConcurrentHashMap;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -71,7 +70,9 @@ public class WechatJsapiSignatureService {
                 String.format(TICKET_URL, token), Map.class);
         Map<String, Object> body = response.getBody();
         if (body == null || !"ok".equals(body.get("errmsg"))) {
-            log.error("Failed to get jsapi_ticket: {}", body);
+            log.error("Failed to get jsapi_ticket errcode={} errmsg={}",
+                    body == null ? "null" : body.get("errcode"),
+                    body == null ? "null" : body.get("errmsg"));
             throw new RuntimeException("Failed to get jsapi_ticket from WeChat");
         }
         jsapiTicket = (String) body.get("ticket");
@@ -88,7 +89,9 @@ public class WechatJsapiSignatureService {
                 String.format(TOKEN_URL, appId, appSecret), Map.class);
         Map<String, Object> body = response.getBody();
         if (body == null || body.get("access_token") == null) {
-            log.error("Failed to get access_token: {}", body);
+            log.error("Failed to get access_token errcode={} errmsg={}",
+                    body == null ? "null" : body.get("errcode"),
+                    body == null ? "null" : body.get("errmsg"));
             throw new RuntimeException("Failed to get access_token from WeChat");
         }
         accessToken = (String) body.get("access_token");
