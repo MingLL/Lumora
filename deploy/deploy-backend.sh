@@ -117,9 +117,14 @@ step "校验新旧镜像都能用迁移后的库"
 # nodeSelector 不能省：镜像只在 BACKEND_NODE 上，而 imagePullPolicy 默认对
 # 带 tag 的镜像是 IfNotPresent，集群又没有可用 registry。不钉节点的话调度器
 # 可能把它放到控制面，然后卡在 ImagePullBackOff 而不是真的校验了什么。
+#
+# labels.app=lumora-backend 不能省：lumora-mysql-ingress NetworkPolicy 只放行
+# 带这个 label 的 pod 访问 MySQL:3306。kubectl run 默认只打 run=<name>，
+# 不带 app=lumora-backend 会被 NetworkPolicy 拦成 Connection refused，
+# 看起来像数据库挂了，其实是网络策略。
 ssh "$CONTROL_HOST" "sudo $K3S kubectl -n '$NAMESPACE' run lumora-smoke-$tag \
     --image='$IMAGE' --restart=Never --rm -i --quiet \
-    --overrides='{\"spec\":{\"nodeSelector\":{\"kubernetes.io/hostname\":\"$BACKEND_NODE\"},\"enableServiceLinks\":false,\"containers\":[{\"name\":\"smoke\",\"image\":\"$IMAGE\",\"env\":[{\"name\":\"LUMORA_MODE\",\"value\":\"schema-smoke\"}],\"envFrom\":[{\"secretRef\":{\"name\":\"lumora-env\"}}]}]}}' \
+    --overrides='{\"metadata\":{\"labels\":{\"app\":\"lumora-backend\"}},\"spec\":{\"nodeSelector\":{\"kubernetes.io/hostname\":\"$BACKEND_NODE\"},\"enableServiceLinks\":false,\"containers\":[{\"name\":\"smoke\",\"image\":\"$IMAGE\",\"env\":[{\"name\":\"LUMORA_MODE\",\"value\":\"schema-smoke\"}],\"envFrom\":[{\"secretRef\":{\"name\":\"lumora-env\"}}]}]}}' \
     " >/dev/null || fail "schema-smoke 失败：候选镜像读不了迁移后的库"
 info "schema-smoke 通过"
 
