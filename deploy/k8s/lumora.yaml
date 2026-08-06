@@ -90,8 +90,9 @@ data:
             # HTML 不缓存，保证发布后刷新即可见新内容
             location / {
                 add_header Cache-Control "no-cache";
-                # Astro 输出的是 目录/index.html，$uri/ 交给 index 指令兜底
-                try_files $uri $uri/ =404;
+                # Astro 输出的是 目录/index.html
+                # $uri/index.html 放在 $uri/ 前面，避免无尾斜杠的路径被 nginx 先 301 到带斜杠
+                try_files $uri $uri/index.html $uri/ =404;
             }
 
             error_page 404 /404.html;
