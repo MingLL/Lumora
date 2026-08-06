@@ -1,0 +1,82 @@
+# Traefik HelmChartConfig：覆盖 k3s 自带的 Traefik 配置。
+#
+# 这个文件同时存在于两处，改一处必须改另一处：
+#   - git:       deploy/k8s/traefik-config.yaml        （版本追溯）
+#   - dev1:      /var/lib/rancher/k3s/server/manifests/traefik-config.yaml  （k3s auto-apply）
+#
+# k3s 每次重启会用 manifest 目录里的文件重新 apply。如果只 kubectl apply 而不
+# 更新 manifest 文件，k3s 重启后配置会被 manifest 里的旧版覆盖 -- 这正是
+# 2026-08-06 的证书故障根因：manifest 是精简版（缺 certificatesResolvers），
+# k3s 重启后 ACME 配置丢失，Traefik 回退到自签默认证书，浏览器报
+# "您的连接不是私密连接"。
+#
+# 改这个文件后：commit + push，再 scp 到 dev1 的 manifest 目录，k3s 会在
+# 30 秒内自动 apply；也可以直接 kubectl apply 立即生效。
+apiVersion: helm.cattle.io/v1
+kind: HelmChartConfig
+metadata:
+  name: traefik
+  namespace: kube-system
+spec:
+  valuesContent: |-
+    image:
+      repository: public.ecr.aws/docker/library/traefik
+      tag: v3.3.2
+    resources:
+      requests:
+        cpu: 50m
+        memory: 64Mi
+      limits:
+        cpu: 300m
+        memory: 192Mi
+    # Persistent access logs (JSON) on dev1 hostPath /var/log/traefik.
+    # Rotated daily by host logrotate /etc/logrotate.d/traefik (copytruncate, 30d).
+    logs:
+      general:
+        level: INFO
+      access:
+        enabled: true
+        format: json
+        filePath: /var/log/traefik/access.log
+        fields:
+          headers:
+            defaultmode: drop
+            names:
+              User-Agent: keep
+              Referer: keep
+    deployment:
+      additionalVolumes:
+        - name: traefik-logs
+          hostPath:
+            path: /var/log/traefik
+            type: DirectoryOrCreate
+    additionalVolumeMounts:
+      - name: traefik-logs
+        mountPath: /var/log/traefik
+    ports:
+      web:
+        forwardedHeaders:
+          insecure: false
+          trustedIPs: []
+    service:
+      spec:
+        externalTrafficPolicy: Local
+    nodeSelector:
+      kubernetes.io/hostname: dev1
+    persistence:
+      enabled: true
+      name: data
+      accessMode: ReadWriteOnce
+      size: 128Mi
+      storageClass: local-path
+      path: /data
+      annotations:
+        lumora.love/managed: "true"
+    certificatesResolvers:
+      le-prod:
+        acme:
+          email: ambition1314@icloud.com
+          storage: /data/acme-prod.json
+          caServer: https://acme-v02.api.letsencrypt.org/directory
+          httpChallenge:
+            entryPoint: web
