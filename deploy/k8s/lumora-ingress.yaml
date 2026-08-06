@@ -28,6 +28,8 @@ spec:
     contentTypeNosniff: true
     referrerPolicy: strict-origin-when-cross-origin
     customResponseHeaders:
+      # 隐藏 Server 头（server_tokens off 只去版本号，这里彻底去掉）
+      Server: ""
       # CSP 先用 Report-Only 观察，确认没有误伤再换成 Content-Security-Policy。
       # 站点有一个内联 <script type="module">，所以暂时留着 'unsafe-inline'。
       Content-Security-Policy-Report-Only: >-

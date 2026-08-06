@@ -207,29 +207,4 @@ spec:
                 name: lumora-web
                 port:
                   number: 80
----
-# lumora.love 的 HTTPS 入口。证书解析器 le-prod 在 k3s 的
-# HelmChartConfig/traefik 中定义；名称必须严格一致，否则 TLS 路由不会加载。
-apiVersion: traefik.io/v1alpha1
-kind: IngressRoute
-metadata:
-  name: lumora-love-tls
-  namespace: lumora
-spec:
-  entryPoints:
-    - websecure
-  routes:
-    - kind: Rule
-      match: Host(`lumora.love`) && PathPrefix(`/wechat/callback`)
-      priority: 200
-      services:
-        - name: lumora-backend-web
-          port: 8080
-    - kind: Rule
-      match: Host(`lumora.love`)
-      priority: 100
-      services:
-        - name: lumora-web
-          port: 80
-  tls:
-    certResolver: le-prod
+                
