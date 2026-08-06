@@ -136,7 +136,7 @@ sed -e "s|__IMAGE__|$IMAGE|g" -e "s|__MANIFEST_HASH__|$manifest_hash|g" \
 
 # 入口层（Middleware + IngressRoute）前后端共用，两个发布脚本都要 apply，
 # 否则线上改动会被另一边的旧状态覆盖。
-ssh "$CONTROL_HOST" "cat > /tmp/lumora-ingress.yaml && sudo k3s kubectl apply -f /tmp/lumora-ingress.yaml" \
+ssh "$CONTROL_HOST" "cat > /tmp/lumora-ingress.yaml && sudo $K3S kubectl apply -f /tmp/lumora-ingress.yaml" \
   < deploy/k8s/lumora-ingress.yaml
 
 step "等待就绪"
