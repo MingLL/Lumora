@@ -1,5 +1,6 @@
 ---
 import type { CollectionEntry } from 'astro:content';
+import { coverPlaceholder } from '@/lib/image-meta.mjs';
 
 interface Props {
   post: CollectionEntry<'blog'>;
@@ -7,6 +8,7 @@ interface Props {
 }
 
 const { post, image = true } = Astro.props;
+const coverStyle = await coverPlaceholder(post.data.cover);
 const formatDate = (date: Date) => date.toLocaleDateString('zh-CN', {
   year: 'numeric',
   month: '2-digit',
@@ -17,7 +19,7 @@ const formatDate = (date: Date) => date.toLocaleDateString('zh-CN', {
 <a class="editorial-card group block h-full overflow-hidden rounded-[6px] p-3 transition duration-300 hover:-translate-y-1 hover:shadow-soft" href={`/posts/${post.id}`}>
   {image && (
     post.data.cover ? (
-      <img class="aspect-[4/3] w-full rounded-[3px] object-cover grayscale-[12%] transition duration-500 group-hover:grayscale-0" src={post.data.cover} alt={post.data.title} />
+      <img class="aspect-[4/3] w-full rounded-[3px] object-cover grayscale-[12%] transition duration-500 group-hover:grayscale-0" src={post.data.cover} alt={post.data.title} decoding="async" style={coverStyle} />
     ) : (
       <div class="film-frame aspect-[4/3] rounded-[3px]">
         <div class="film-skyline"></div>

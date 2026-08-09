@@ -1,5 +1,6 @@
 ---
 import type { CollectionEntry } from 'astro:content';
+import { coverPlaceholders } from '@/lib/image-meta.mjs';
 
 interface Props {
   posts: CollectionEntry<'blog'>[];
@@ -8,6 +9,11 @@ interface Props {
 const { posts } = Astro.props;
 const sorted = [...posts].sort((a, b) => a.data.date.getTime() - b.data.date.getTime());
 const ym = (date: Date) => `${date.getFullYear()}.${String(date.getMonth() + 1).padStart(2, '0')}`;
+
+// 缩略图用 aspect-ratio 而不是固定高度：格子宽度由 auto-fit 跟着屏幕变，高度得跟着走。
+// 窄屏一列时给 3:2（太扁的话手机上只剩一条），宽屏五列时收到 21:9。
+// 版位因此在图片下载前就定好，不会跳；再垫一张模糊缩略图，免得几十个格子先空着。
+const placeholder = await coverPlaceholders(sorted);
 ---
 
 <section id="street" class="mt-[140px] scroll-mt-24 bg-night py-[92px] text-night-ink">
@@ -35,7 +41,7 @@ const ym = (date: Date) => `${date.getFullYear()}.${String(date.getMonth() + 1).
         {sorted.map((post) => (
           <div class="flex flex-col gap-3">
             {post.data.cover ? (
-              <img class="block h-[260px] w-full object-cover" src={post.data.cover} alt={post.data.title} loading="lazy" />
+              <img class="block aspect-[3/2] w-full object-cover sm:aspect-[16/9] lg:aspect-[21/9]" src={post.data.cover} alt={post.data.title} loading="lazy" decoding="async" style={placeholder.get(post.id)} />
             ) : (
               <div class="photo-slot photo-slot--dark h-[260px] w-full">这一辑的照片</div>
             )}

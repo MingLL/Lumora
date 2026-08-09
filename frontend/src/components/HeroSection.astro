@@ -1,5 +1,6 @@
 ---
 import { heroCopy, site } from '@/data/site';
+import { coverPlaceholder } from '@/lib/image-meta.mjs';
 
 interface Props {
   photo?: string;
@@ -7,6 +8,7 @@ interface Props {
 }
 
 const { photo = '', caption = '扫街周记 · 街头随手拍' } = Astro.props;
+const photoStyle = await coverPlaceholder(photo);
 ---
 
 <section
@@ -36,7 +38,7 @@ const { photo = '', caption = '扫街周记 · 街头随手拍' } = Astro.props;
     <div class="relative mt-14 h-[340px] max-w-[500px] md:h-[320px]">
       <div class="absolute left-0 top-1 w-[66%] -rotate-[1.6deg] border border-line-soft bg-white p-[9px_9px_10px] shadow-[0_3px_22px_rgba(43,39,35,0.10)]">
         {photo ? (
-          <img class="block h-[205px] w-full object-cover" src={photo} alt={caption} loading="lazy" />
+          <img class="block h-[205px] w-full object-cover" src={photo} alt={caption} loading="lazy" decoding="async" style={photoStyle} />
         ) : (
           <div class="photo-slot h-[205px] w-full">一张街头照片</div>
         )}

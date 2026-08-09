@@ -2,6 +2,9 @@
 import SiteLayout from '@/layouts/SiteLayout.astro';
 import SubscribeCard from '@/components/SubscribeCard.astro';
 import { heroCopy, site } from '@/data/site';
+import { coverPlaceholder } from '@/lib/image-meta.mjs';
+
+const portraitStyle = await coverPlaceholder('/images/covers/twenty-eight.jpg');
 
 const notes = [
   {
@@ -26,6 +29,8 @@ const notes = [
             class="aspect-[4/3] w-full object-cover"
             src="/images/covers/twenty-eight.jpg"
             alt="黄昏里走在路上的人"
+            decoding="async"
+            style={portraitStyle}
           />
           <div class="pointer-events-none absolute inset-x-0 bottom-0 h-3/5 bg-gradient-to-t from-[rgba(28,25,22,0.78)] to-transparent"></div>
           <figcaption class="absolute inset-x-0 bottom-0 p-6">

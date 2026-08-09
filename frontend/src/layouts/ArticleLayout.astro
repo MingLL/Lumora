@@ -4,6 +4,7 @@ import { render } from 'astro:content';
 import SiteLayout from '@/layouts/SiteLayout.astro';
 import SubscribeCard from '@/components/SubscribeCard.astro';
 import { site } from '@/data/site';
+import { coverPlaceholder } from '@/lib/image-meta.mjs';
 
 interface Props {
   post: CollectionEntry<'blog'>;
@@ -13,6 +14,7 @@ interface Props {
 
 const { post, previous, next } = Astro.props;
 const { Content } = await render(post);
+const coverStyle = await coverPlaceholder(post.data.cover);
 
 const stamp = (date: Date) =>
   `${date.getFullYear()}.${String(date.getMonth() + 1).padStart(2, '0')}.${String(date.getDate()).padStart(2, '0')}`;
@@ -53,7 +55,7 @@ const minutes = Math.max(1, Math.round((post.body ?? '').replace(/\s/g, '').leng
 
     <figure class="mx-auto mt-11 max-w-[720px]">
       {post.data.cover ? (
-        <img class="aspect-[16/10] w-full rounded-[4px] object-cover" src={post.data.cover} alt={post.data.title} />
+        <img class="aspect-[16/10] w-full rounded-[4px] object-cover" src={post.data.cover} alt={post.data.title} decoding="async" style={coverStyle} />
       ) : (
         <div class="film-frame flex aspect-[16/10] items-end rounded-[4px] p-6">
           <div class="film-skyline"></div>
