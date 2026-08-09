@@ -1,0 +1,113 @@
+# 集群内的 PostgreSQL，取代原来的 MySQL 8.4。
+#
+#   - 数据落在 __PG_NODE__ 的 /opt/lumora/postgres，用 nodeSelector 钉死在那台，
+#     因为 hostPath 不跟着 pod 漂移，换节点就等于换了一个空库。
+#   - 线上当前钉在 dev2。备份要认准这台。
+#   - 备份和加密是你的责任，见 backend/README.md 的「Operating the Database」。
+#     hostPath 本身不提供任何加密。
+#
+# 为什么从 MySQL 换过来：MySQL 8.4 为 0.3 MB 的数据常驻 484 MiB（performance_schema
+# 等独占服务器默认值），在 1870 MiB 的 dev2 上和三个 JVM 一起把节点推到 OOM。
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: lumora-postgres
+  namespace: lumora
+spec:
+  clusterIP: None
+  selector:
+    app: lumora-postgres
+  ports:
+    - name: postgres
+      port: 5432
+      targetPort: postgres
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: lumora-postgres
+  namespace: lumora
+  labels:
+    app: lumora-postgres
+spec:
+  serviceName: lumora-postgres
+  replicas: 1
+  selector:
+    matchLabels:
+      app: lumora-postgres
+  template:
+    metadata:
+      labels:
+        app: lumora-postgres
+    spec:
+      nodeSelector:
+        kubernetes.io/hostname: __PG_NODE__
+      containers:
+        - name: postgres
+          # 和前端 nginx 同样的理由走 ECR Public：阿里云机器直连 Docker Hub 不通。
+          image: public.ecr.aws/docker/library/postgres:17-alpine
+          imagePullPolicy: IfNotPresent
+          args:
+            # 应用侧统一用 UTC 存取，库也钉在 UTC，避免跨时区偏移。
+            - "-c"
+            - "timezone=UTC"
+            # 0.3 MB 的库，默认值是给独占服务器调的，全部收小。
+            - "-c"
+            - "shared_buffers=32MB"
+            - "-c"
+            - "max_connections=32"
+            - "-c"
+            - "work_mem=2MB"
+            - "-c"
+            - "maintenance_work_mem=16MB"
+          env:
+            - name: POSTGRES_DB
+              valueFrom:
+                secretKeyRef:
+                  name: lumora-env
+                  key: POSTGRES_DATABASE
+            - name: POSTGRES_USER
+              valueFrom:
+                secretKeyRef:
+                  name: lumora-env
+                  key: POSTGRES_USERNAME
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: lumora-env
+                  key: POSTGRES_PASSWORD
+            # 官方镜像默认把数据放在 /var/lib/postgresql/data 的根，挂 hostPath 时
+            # lost+found 之类的残留会让 initdb 拒绝启动，所以下沉一层子目录。
+            - name: PGDATA
+              value: /var/lib/postgresql/data/pgdata
+          ports:
+            - name: postgres
+              containerPort: 5432
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/postgresql/data
+          resources:
+            requests:
+              cpu: 100m
+              memory: 192Mi
+            limits:
+              cpu: "1"
+              memory: 384Mi
+          readinessProbe:
+            exec:
+              command: ["pg_isready", "-h", "127.0.0.1", "-q"]
+            initialDelaySeconds: 10
+            periodSeconds: 5
+          livenessProbe:
+            exec:
+              command: ["pg_isready", "-h", "127.0.0.1", "-q"]
+            initialDelaySeconds: 30
+            periodSeconds: 30
+          securityContext:
+            allowPrivilegeEscalation: false
+      volumes:
+        - name: data
+          hostPath:
+            path: /opt/lumora/postgres
+            type: DirectoryOrCreate
