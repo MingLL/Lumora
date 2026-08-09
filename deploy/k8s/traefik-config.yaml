@@ -55,6 +55,21 @@ spec:
         mountPath: /var/log/traefik
     ports:
       web:
+        # 80 端口整体 301 到 443。在这之前只有 HSTS 在兜：浏览器访问过一次 https
+        # 才会自己升级，首次访问、以及 curl / 爬虫 / RSS 阅读器这类不认 HSTS 的
+        # 客户端一直走明文。lumora-ingress.yaml 的注释早就假设了这条跳转存在。
+        #
+        # ACME 不受影响：Traefik 的 http-01 挑战路由优先级高于入口层跳转，
+        # /.well-known/acme-challenge/ 仍然在 80 端口明文应答（下面 le-prod 用的就是它）。
+        #
+        # ⚠️ 语法按 chart v34 写。旧的 `redirectTo: {port: websecure}`（deploy/README.md
+        # 「接 HTTPS」一节记的就是这个）在 v34 已被移除，用它 helm upgrade 会直接 fail。
+        # permanent: true 才是 301，不写默认发 302。
+        redirections:
+          entryPoint:
+            to: websecure
+            scheme: https
+            permanent: true
         forwardedHeaders:
           insecure: false
           trustedIPs: []
