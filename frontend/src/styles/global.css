@@ -54,9 +54,14 @@ body {
   }
 }
 
-img {
-  max-width: 100%;
-  height: auto;
+/* 必须待在 @layer base 里。裸写在层外的话，按 CSS 层叠规则「未分层声明优先于所有
+   分层声明」，这条 height:auto 会压过 Tailwind 放在 @layer utilities 里的 h-[260px]、
+   h-[205px] 之类固定高度 —— 图片没加载时高度塌成 0，加载完再撑开，整页跟着跳。 */
+@layer base {
+  img {
+    max-width: 100%;
+    height: auto;
+  }
 }
 
 ::selection {

@@ -120,8 +120,14 @@ spec:
   valuesContent: |-
     ports:
       web:
-        redirectTo:
-          port: websecure
+        # chart v34 起的写法。旧的 `redirectTo: {port: websecure}` 已被移除，
+        # 继续用它 helm upgrade 会直接 fail（2026-08-09 踩过）。
+        # permanent: true 才发 301，不写默认是 302。
+        redirections:
+          entryPoint:
+            to: websecure
+            scheme: https
+            permanent: true
     certificatesResolvers:
       le:
         acme:

@@ -1,5 +1,6 @@
 ---
 import type { CollectionEntry } from 'astro:content';
+import { coverPlaceholder, coverPlaceholders } from '@/lib/image-meta.mjs';
 
 interface Props {
   posts: CollectionEntry<'blog'>[];
@@ -16,6 +17,9 @@ const formatDate = (date: Date) => date.toLocaleDateString('zh-CN', {
 // 单篇改用整幅特写，占满内容宽度。
 const feature = posts.length === 1 ? posts[0] : null;
 const columnClass = posts.length >= 3 ? 'columns-1 sm:columns-2 lg:columns-3' : 'columns-1 sm:columns-2';
+
+const featureStyle = await coverPlaceholder(feature?.data.cover);
+const placeholder = await coverPlaceholders(posts);
 ---
 
 {feature ? (
@@ -26,6 +30,8 @@ const columnClass = posts.length >= 3 ? 'columns-1 sm:columns-2 lg:columns-3' : 
           class="aspect-[16/9] w-full object-cover grayscale-[18%] transition duration-700 group-hover:scale-[1.015] group-hover:grayscale-0"
           src={feature.data.cover}
           alt={feature.data.title}
+          decoding="async"
+          style={featureStyle}
         />
       ) : (
         <div class="film-frame aspect-[16/9] w-full">
@@ -55,7 +61,7 @@ const columnClass = posts.length >= 3 ? 'columns-1 sm:columns-2 lg:columns-3' : 
           <img class:list={[
             'w-full rounded-[3px] object-cover grayscale-[18%] transition duration-500 group-hover:grayscale-0',
             index % 3 === 0 ? 'aspect-[3/4]' : 'aspect-[4/3]'
-          ]} src={post.data.cover} alt={post.data.title} />
+          ]} src={post.data.cover} alt={post.data.title} decoding="async" style={placeholder.get(post.id)} />
         ) : (
           <div class:list={[
             'film-frame w-full rounded-[3px]',

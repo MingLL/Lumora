@@ -119,7 +119,9 @@ run_deploy() {
   : > "$CALLS"
   (
     cd "$WORK/repo"
-    PATH="$WORK/bin:$PATH" bash deploy/deploy-backend.sh "$@"
+    # ALLOW_BEHIND 让发布脚本跳过「是否落后远端」的预检。那一步要 git fetch，而这里
+    # 的 ssh 是假的（$WORK/bin/ssh），真去 fetch 会卡死在假 ssh 上。测试不该联网。
+    ALLOW_BEHIND=1 PATH="$WORK/bin:$PATH" bash deploy/deploy-backend.sh "$@"
   ) > "$WORK/stdout.log" 2> "$WORK/stderr.log"
   echo $?
 }

@@ -1,5 +1,6 @@
 ---
 import type { CollectionEntry } from 'astro:content';
+import { coverPlaceholder } from '@/lib/image-meta.mjs';
 
 interface Props {
   name: string;
@@ -24,6 +25,7 @@ const skylineVariants = ['', 'film-skyline--b', 'film-skyline--c'];
 
 const [c1, c2, c3, c4] = palettes[index % palettes.length];
 const skyline = skylineVariants[index % skylineVariants.length];
+const coverStyle = await coverPlaceholder(cover);
 ---
 
 <article class="editorial-card group overflow-hidden rounded-[6px] p-4 transition duration-300 hover:-translate-y-1 hover:shadow-soft">
@@ -34,6 +36,8 @@ const skyline = skylineVariants[index % skylineVariants.length];
         src={cover}
         alt={`${name}｜${description}`}
         loading="lazy"
+        decoding="async"
+        style={coverStyle}
       />
       <div class="pointer-events-none absolute inset-x-0 bottom-0 h-3/5 bg-gradient-to-t from-[rgba(28,25,22,0.78)] to-transparent"></div>
       <div class="relative">

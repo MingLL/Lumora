@@ -8,8 +8,11 @@
 #   - lumora.yaml 里的 Ingress 只覆盖 web(80)，且 Traefik 在入口层把 80 整体
 #     301 到 443（见 deploy/README.md「接域名」）。
 #
-# ⚠️ 这两个对象曾长期只存在于线上、不在仓库里，导致 deploy.sh 用旧清单把线上
+# ⚠️ 这里的对象曾长期只存在于线上、不在仓库里，导致 deploy.sh 用旧清单把线上
 #    改动覆盖掉过。改动请务必写回本文件。
+#    www-to-apex 就是又一例：2026-08-04 在集群里手建，仓库里一直没有，
+#    对应的 www 路由后来被一次清理连带删掉，中间件成了孤儿 ——
+#    于是 www.lumora.love 有 DNS、有证书，访问却 404。2026-08-09 补回。
 ---
 apiVersion: traefik.io/v1alpha1
 kind: Middleware
@@ -45,6 +48,18 @@ spec:
         interest-cohort=()
 ---
 apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: www-to-apex
+  namespace: lumora
+spec:
+  # www 统一 301 到主域名，避免同一份内容出现在两个地址上（canonical 也只写主域名）。
+  redirectRegex:
+    permanent: true
+    regex: ^https://www\.lumora\.love/(.*)
+    replacement: https://lumora.love/${1}
+---
+apiVersion: traefik.io/v1alpha1
 kind: IngressRoute
 metadata:
   name: lumora-love-tls
@@ -68,6 +83,20 @@ spec:
       priority: 100
       middlewares:
         - name: lumora-security-headers
+          namespace: lumora
+      services:
+        - name: lumora-web
+          port: 80
+    # www 只负责跳到主域名。中间件顺序有意为之：安全头在前，跳转在后 ——
+    # 跳转会直接短路返回 301，响应回程仍会经过安全头中间件，这样 301 上也带 HSTS。
+    # 后端服务只是占位，请求走不到那里。
+    - kind: Rule
+      match: Host(`www.lumora.love`)
+      priority: 50
+      middlewares:
+        - name: lumora-security-headers
+          namespace: lumora
+        - name: www-to-apex
           namespace: lumora
       services:
         - name: lumora-web
