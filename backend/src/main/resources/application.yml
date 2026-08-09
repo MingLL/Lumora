@@ -2,10 +2,14 @@ spring:
   application:
     name: lumora
   datasource:
-    url: jdbc:mysql://${MYSQL_HOST}:${MYSQL_PORT:3306}/${MYSQL_DATABASE}?connectionTimeZone=UTC&forceConnectionTimeZoneToSession=true
-    username: ${MYSQL_USERNAME}
-    password: ${MYSQL_PASSWORD}
-    driver-class-name: com.mysql.cj.jdbc.Driver
+    url: jdbc:postgresql://${POSTGRES_HOST}:${POSTGRES_PORT:5432}/${POSTGRES_DATABASE}
+    username: ${POSTGRES_USERNAME}
+    password: ${POSTGRES_PASSWORD}
+    driver-class-name: org.postgresql.Driver
+    hikari:
+      # 取代 MySQL URL 上的 connectionTimeZone=UTC&forceConnectionTimeZoneToSession=true。
+      # 应用统一按 UTC 存取，会话时区必须钉死，否则容器时区一变读出来的时间就偏。
+      connection-init-sql: SET TIME ZONE 'UTC'
   flyway:
     enabled: false
   mail:
@@ -39,11 +43,11 @@ lumora:
   wechat-token: ${WECHAT_TOKEN:}
   wechat-aes-key: ${WECHAT_AES_KEY:}
   wechat-app-secret: ${WECHAT_APP_SECRET:}
-  mysql-host: ${MYSQL_HOST:}
-  mysql-port: ${MYSQL_PORT:3306}
-  mysql-database: ${MYSQL_DATABASE:}
-  mysql-username: ${MYSQL_USERNAME:}
-  mysql-password: ${MYSQL_PASSWORD:}
+  postgres-host: ${POSTGRES_HOST:}
+  postgres-port: ${POSTGRES_PORT:5432}
+  postgres-database: ${POSTGRES_DATABASE:}
+  postgres-username: ${POSTGRES_USERNAME:}
+  postgres-password: ${POSTGRES_PASSWORD:}
   mail-username: ${MAIL_USERNAME:}
   mail-auth-code: ${MAIL_AUTH_CODE:}
   mail-from-name: ${MAIL_FROM_NAME:Lumora}

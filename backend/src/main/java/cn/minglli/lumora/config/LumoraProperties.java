@@ -33,22 +33,22 @@ public class LumoraProperties {
     @NotBlank(message = "WECHAT_APP_SECRET must not be blank")
     private String wechatAppSecret;
 
-    @NotBlank(message = "MYSQL_HOST must not be blank")
-    private String mysqlHost;
+    @NotBlank(message = "POSTGRES_HOST must not be blank")
+    private String postgresHost;
 
-    @NotNull(message = "MYSQL_PORT must be provided")
-    @Min(value = 1, message = "MYSQL_PORT must be between 1 and 65535")
-    @Max(value = 65535, message = "MYSQL_PORT must be between 1 and 65535")
-    private Integer mysqlPort;
+    @NotNull(message = "POSTGRES_PORT must be provided")
+    @Min(value = 1, message = "POSTGRES_PORT must be between 1 and 65535")
+    @Max(value = 65535, message = "POSTGRES_PORT must be between 1 and 65535")
+    private Integer postgresPort;
 
-    @NotBlank(message = "MYSQL_DATABASE must not be blank")
-    private String mysqlDatabase;
+    @NotBlank(message = "POSTGRES_DATABASE must not be blank")
+    private String postgresDatabase;
 
-    @NotBlank(message = "MYSQL_USERNAME must not be blank")
-    private String mysqlUsername;
+    @NotBlank(message = "POSTGRES_USERNAME must not be blank")
+    private String postgresUsername;
 
-    @NotBlank(message = "MYSQL_PASSWORD must not be blank")
-    private String mysqlPassword;
+    @NotBlank(message = "POSTGRES_PASSWORD must not be blank")
+    private String postgresPassword;
 
     @NotBlank(message = "MAIL_USERNAME must not be blank")
     @Email(message = "MAIL_USERNAME must be a valid email address")
@@ -121,44 +121,44 @@ public class LumoraProperties {
         this.wechatAppSecret = wechatAppSecret;
     }
 
-    public String getMysqlHost() {
-        return mysqlHost;
+    public String getPostgresHost() {
+        return postgresHost;
     }
 
-    public void setMysqlHost(String mysqlHost) {
-        this.mysqlHost = mysqlHost;
+    public void setPostgresHost(String postgresHost) {
+        this.postgresHost = postgresHost;
     }
 
-    public Integer getMysqlPort() {
-        return mysqlPort;
+    public Integer getPostgresPort() {
+        return postgresPort;
     }
 
-    public void setMysqlPort(Integer mysqlPort) {
-        this.mysqlPort = mysqlPort;
+    public void setPostgresPort(Integer postgresPort) {
+        this.postgresPort = postgresPort;
     }
 
-    public String getMysqlDatabase() {
-        return mysqlDatabase;
+    public String getPostgresDatabase() {
+        return postgresDatabase;
     }
 
-    public void setMysqlDatabase(String mysqlDatabase) {
-        this.mysqlDatabase = mysqlDatabase;
+    public void setPostgresDatabase(String postgresDatabase) {
+        this.postgresDatabase = postgresDatabase;
     }
 
-    public String getMysqlUsername() {
-        return mysqlUsername;
+    public String getPostgresUsername() {
+        return postgresUsername;
     }
 
-    public void setMysqlUsername(String mysqlUsername) {
-        this.mysqlUsername = mysqlUsername;
+    public void setPostgresUsername(String postgresUsername) {
+        this.postgresUsername = postgresUsername;
     }
 
-    public String getMysqlPassword() {
-        return mysqlPassword;
+    public String getPostgresPassword() {
+        return postgresPassword;
     }
 
-    public void setMysqlPassword(String mysqlPassword) {
-        this.mysqlPassword = mysqlPassword;
+    public void setPostgresPassword(String postgresPassword) {
+        this.postgresPassword = postgresPassword;
     }
 
     public String getMailUsername() {

@@ -39,8 +39,8 @@ public class StartupModeRunner implements CommandLineRunner {
 
     private void runMigrate() {
         String url = jdbcUrl();
-        String username = env("MIGRATION_MYSQL_USERNAME", properties.getMysqlUsername());
-        String password = env("MIGRATION_MYSQL_PASSWORD", properties.getMysqlPassword());
+        String username = env("MIGRATION_POSTGRES_USERNAME", properties.getPostgresUsername());
+        String password = env("MIGRATION_POSTGRES_PASSWORD", properties.getPostgresPassword());
         Flyway flyway = Flyway.configure()
                 .dataSource(url, username, password)
                 .locations("classpath:db/migration")
@@ -52,13 +52,13 @@ public class StartupModeRunner implements CommandLineRunner {
 
     private void runSchemaSmoke() {
         DriverManagerDataSource dataSource = new DriverManagerDataSource(
-                jdbcUrl(), properties.getMysqlUsername(), properties.getMysqlPassword());
-        dataSource.setDriverClassName("com.mysql.cj.jdbc.Driver");
+                jdbcUrl(), properties.getPostgresUsername(), properties.getPostgresPassword());
+        dataSource.setDriverClassName("org.postgresql.Driver");
         JdbcTemplate jdbcTemplate = new JdbcTemplate(dataSource);
         jdbcTemplate.queryForObject("SELECT 1", Integer.class);
         for (String table : REQUIRED_TABLES) {
             jdbcTemplate.queryForObject(
-                    "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name = ?",
+                    "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = current_schema() AND table_name = ?",
                     Integer.class, table);
         }
         log.info("Schema smoke check passed for tables {}", REQUIRED_TABLES);
@@ -66,8 +66,8 @@ public class StartupModeRunner implements CommandLineRunner {
     }
 
     private String jdbcUrl() {
-        return "jdbc:mysql://%s:%d/%s?connectionTimeZone=UTC&forceConnectionTimeZoneToSession=true"
-                .formatted(properties.getMysqlHost(), properties.getMysqlPort(), properties.getMysqlDatabase());
+        return "jdbc:postgresql://%s:%d/%s"
+                .formatted(properties.getPostgresHost(), properties.getPostgresPort(), properties.getPostgresDatabase());
     }
 
     private String env(String name, String fallback) {
