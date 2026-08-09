@@ -193,10 +193,10 @@ web_replicas=$(
   && ok "低内存集群默认只运行一个 Web 副本" \
   || no "Web 副本数是 ${web_replicas:-未找到}，预期为 1"
 
-# 三种角色都必须落在 dev2。这不只是资源摆放——镜像只分发到 dev2（控制面
+# 两种角色都必须落在 dev2。这不只是资源摆放——镜像只分发到 dev2（控制面
 # 不导后端镜像，见 deploy-backend.sh 的 IMAGE_HOSTS），任何一个角色跑到 dev1
 # 都会卡在 ImagePullBackOff。改节点必须同时改 IMAGE_HOSTS，下面的用例会一起验。
-for role in web worker ops; do
+for role in web worker; do
   role_node=$(
     awk -v target="lumora-backend-${role}" '
       $0 == "kind: Deployment" { deployment = 1; matched = 0; next }
@@ -217,10 +217,13 @@ migrate_node=$(
   && ok "迁移 Job 钉在有镜像的 dev2" \
   || no "迁移 Job 调度节点是 ${migrate_node:-未指定}，预期为 dev2（否则 ImagePullBackOff）"
 
-# dev2 物理内存 1870Mi，上面跑 web/worker/ops 加集群内 MySQL。limits 合计一旦
-# 明显超过物理内存，四个容器同时冲顶就会惊动内核 OOM killer —— 它不看 limits
-# 挑谁杀，很可能连 MySQL 一起带走。收紧后最坏是单个 Pod 被 OOMKill 再拉起。
-mem_budget=1920
+# dev2 物理内存 1870Mi，上面跑 web/worker 两个 JVM 加集群内 PostgreSQL。limits
+# 合计一旦明显超过物理内存，三个容器同时冲顶就会惊动内核 OOM killer —— 它不看
+# limits 挑谁杀，很可能连 PostgreSQL 一起带走。2026-08-08/09 两次断站都是节点级
+# OOM kill：被杀掉的容器 RSS 远低于自己的 cgroup limit，是别的容器把节点撑爆的，
+# 单看某个容器自己的 limit 发现不了这类问题，必须守住合计。收紧后最坏是单个
+# Pod 被 OOMKill 再拉起。
+mem_budget=1152
 mem_limits_total=$(
   awk '
     /^ *limits:/    { in_limits = 1; next }
@@ -232,10 +235,10 @@ mem_limits_total=$(
       in_limits = 0
     }
     END { print total + 0 }
-  ' "$TEST_ROOT/deploy/k8s/lumora-backend.yaml" "$TEST_ROOT/deploy/k8s/lumora-mysql.yaml"
+  ' "$TEST_ROOT/deploy/k8s/lumora-backend.yaml" "$TEST_ROOT/deploy/k8s/lumora-postgres.yaml"
 )
 (( mem_limits_total <= mem_budget )) \
-  && ok "dev2 上四个容器 limits 合计 ${mem_limits_total}Mi，未超出 ${mem_budget}Mi 预算" \
+  && ok "dev2 上三个容器 limits 合计 ${mem_limits_total}Mi，未超出 ${mem_budget}Mi 预算" \
   || no "limits 合计 ${mem_limits_total}Mi 超出 ${mem_budget}Mi（节点只有 1870Mi），内核 OOM 风险"
 
 service_links_disabled=$(
@@ -244,9 +247,9 @@ service_links_disabled=$(
     "$TEST_ROOT/deploy/k8s/lumora-backend-migrate.yaml" \
     | awk '{ total += $1 } END { print total + 0 }'
 )
-[[ "$service_links_disabled" == "4" ]] \
-  && ok "四种后端 Pod 都禁用 Kubernetes Service 环境变量注入" \
-  || no "只有 ${service_links_disabled} 个后端 Pod 禁用 Service Links，预期为 4"
+[[ "$service_links_disabled" == "3" ]] \
+  && ok "三种后端 Pod 都禁用 Kubernetes Service 环境变量注入" \
+  || no "只有 ${service_links_disabled} 个后端 Pod 禁用 Service Links，预期为 3"
 
 printf '\n--- 正常发布路径 ---\n'
 status=$(run_deploy happy)
