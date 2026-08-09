@@ -149,38 +149,65 @@ const minutes = Math.max(1, Math.round((post.body ?? '').replace(/\s/g, '').leng
       }
     }
   </script>
-  <script is:inline src="https://res.wx.qq.com/open/js/jweixin-1.6.0.js"></script>
   <script>
     (function () {
-      const wx = (window as any).wx;
-      if (!wx) return;
+      // 非微信环境（PC、其它浏览器等）直接跳过：不加载 jweixin SDK，也不请求签名接口。
+      if (!/MicroMessenger/i.test(navigator.userAgent)) return;
+
       const url = location.href.split('#')[0];
-      fetch(`/wechat/callback/jsapi-signature?url=${encodeURIComponent(url)}`)
-        .then((res) => {
-          if (!res.ok) throw new Error(`HTTP ${res.status}`);
-          return res.json();
-        })
-        .then((data: any) => {
-          wx.config({
-            debug: false,
-            appId: data.appId,
-            timestamp: data.timestamp,
-            nonceStr: data.nonceStr,
-            signature: data.signature,
-            jsApiList: ['updateAppMessageShareData', 'updateTimelineShareData']
-          });
-          wx.ready(() => {
-            const shareData = {
-              title: document.title,
-              desc: document.querySelector('meta[name="description"]')?.getAttribute('content') || '',
-              link: url,
-              imgUrl: document.querySelector('meta[property="og:image"]')?.getAttribute('content') || ''
-            };
-            wx.updateAppMessageShareData(shareData);
-            wx.updateTimelineShareData(shareData);
-          });
-        })
-        .catch(() => {});
+      const reportError = (errMsg: string) => {
+        // fire-and-forget；sendBeacon 不阻塞 unload，签名失败也算运维信号
+        const payload = JSON.stringify({ url, errMsg });
+        if (navigator.sendBeacon) {
+          navigator.sendBeacon('/wechat/callback/jsapi-signature/error', new Blob([payload], { type: 'application/json' }));
+        } else {
+          fetch('/wechat/callback/jsapi-signature/error', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: payload,
+            keepalive: true
+          }).catch(() => {});
+        }
+      };
+      // 动态注入 JS-SDK，避免非微信环境也下载它。
+      const sdk = document.createElement('script');
+      sdk.src = 'https://res.wx.qq.com/open/js/jweixin-1.6.0.js';
+      sdk.onload = () => {
+        const wx = (window as any).wx;
+        if (!wx) { reportError('wx sdk missing after load'); return; }
+        fetch(`/wechat/callback/jsapi-signature?url=${encodeURIComponent(url)}`)
+          .then((res) => {
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
+            return res.json();
+          })
+          .then((data: any) => {
+            wx.config({
+              debug: false,
+              appId: data.appId,
+              timestamp: data.timestamp,
+              nonceStr: data.nonceStr,
+              signature: data.signature,
+              jsApiList: ['getNetworkType']
+            });
+            wx.error((res: any) => reportError(res?.errMsg ?? 'unknown wx.error'));
+            wx.ready(() => {
+              // 订阅号没有分享接口权限，用 getNetworkType 验证 JS-SDK 能否工作。
+              // 成功时 console.log 网络类型；失败时上报到后端 jsapi_signature_error 表。
+              wx.getNetworkType({
+                success: (res: any) => {
+                  console.log('[wechat-jsapi] getNetworkType ok:', res.networkType);
+                },
+                fail: (err: any) => {
+                  console.warn('[wechat-jsapi] getNetworkType failed:', err?.errMsg);
+                  reportError(`getNetworkType: ${err?.errMsg ?? 'unknown'}`);
+                }
+              });
+            });
+          })
+          .catch((err: any) => reportError(`fetch failed: ${err?.message ?? err}`));
+      };
+      sdk.onerror = () => reportError('jweixin load failed');
+      document.head.appendChild(sdk);
     })();
   </script>
 </SiteLayout>

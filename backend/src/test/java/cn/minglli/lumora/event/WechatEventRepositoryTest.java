@@ -99,19 +99,32 @@ class WechatEventRepositoryTest extends PostgresContainerTest {
                 "created_at", "timestamp(6)|NO|DEFAULT CURRENT_TIMESTAMP",
                 "updated_at", "timestamp(6)|NO|DEFAULT CURRENT_TIMESTAMP"));
 
+        assertThat(columns("jsapi_signature_error")).containsExactlyEntriesOf(mapOf(
+                "id", "bigint|NO|IDENTITY BY DEFAULT",
+                "url", "varchar(2048)|NO|",
+                "err_msg", "varchar(1024)|NO|",
+                "received_at", "timestamp(6)|NO|DEFAULT CURRENT_TIMESTAMP",
+                "created_at", "timestamp(6)|NO|DEFAULT CURRENT_TIMESTAMP"));
+
         // MySQL's "ENGINE=InnoDB" + per-table utf8mb4_* collation don't have a PostgreSQL
         // analogue: there is one storage engine, and collation is a database/column property,
-        // not a table option. The properties actually worth guarding here are that the three
+        // not a table option. The properties actually worth guarding here are that the four
         // tables exist in the expected schema and that the database stores full Unicode
         // (the reason the old test cared about utf8mb4 in the first place).
         List<String> tables = jdbcTemplate.queryForList("""
                 SELECT tablename
                 FROM pg_tables
                 WHERE schemaname = 'public'
-                  AND tablename IN ('wechat_event', 'daily_report', 'report_delivery_attempt')
+                  AND tablename IN (
+                      'wechat_event',
+                      'daily_report',
+                      'report_delivery_attempt',
+                      'jsapi_signature_error'
+                  )
                 ORDER BY tablename
                 """, String.class);
-        assertThat(tables).containsExactly("daily_report", "report_delivery_attempt", "wechat_event");
+        assertThat(tables).containsExactly(
+                "daily_report", "jsapi_signature_error", "report_delivery_attempt", "wechat_event");
 
         String encoding = jdbcTemplate.queryForObject("""
                 SELECT pg_encoding_to_char(encoding)
@@ -137,6 +150,22 @@ class WechatEventRepositoryTest extends PostgresContainerTest {
                 "uq_delivery_id", "UNIQUE:delivery_id",
                 "uq_auto_report", "UNIQUE:auto_report_id",
                 "uq_manual_request", "UNIQUE:report_id,request_id"));
+        // ix_jsapi_error_url 不在这里：indexes() 靠 pg_attribute 解析索引列，而表达式
+        // 索引的 indkey 是 0，没有对应的属性行，所以它根本不会出现在结果里。它的
+        // 定义单独在下面断言。
+        assertThat(indexes("jsapi_signature_error")).containsExactlyInAnyOrderEntriesOf(mapOf(
+                "jsapi_signature_error_pkey", "UNIQUE:id",
+                "ix_jsapi_error_received_at", "NONUNIQUE:received_at"));
+
+        // MySQL 的前缀索引 url(255) 在 PostgreSQL 只能用表达式索引表达。断言它确实是
+        // left(url, 255) 而不是整列 —— 整列 btree 对高熵多字节值会在 INSERT 时报
+        // "index row size exceeds btree version 4 maximum"，而这张表恰恰是用来记录
+        // 错误的，索引拒绝写入会让错误上报接口自己返回 500。
+        String urlIndexDef = jdbcTemplate.queryForObject("""
+                SELECT indexdef FROM pg_indexes
+                WHERE schemaname = 'public' AND indexname = 'ix_jsapi_error_url'
+                """, String.class);
+        assertThat(urlIndexDef).contains("\"left\"((url)::text, 255)");
 
         // PostgreSQL exposes generated-column metadata through the same standard
         // information_schema.columns view as MySQL, just without MySQL's non-standard

@@ -34,16 +34,18 @@ public class EventRetentionService {
         int deliveriesDeleted = mapper.deleteDeliveriesOlderThan(recordCutoff);
         int reportsDeleted = mapper.deleteUnreferencedReportsOlderThan(recordCutoff);
         int eventsDeleted = mapper.deleteEventsOlderThan(recordCutoff);
+        int jsapiErrorsDeleted = mapper.deleteJsapiSignatureErrorsOlderThan(recordCutoff);
 
-        log.info("Retention completed coordinatesNulled={} deliveriesDeleted={} reportsDeleted={} eventsDeleted={}",
-                coordinatesNulled, deliveriesDeleted, reportsDeleted, eventsDeleted);
-        return new RetentionResult(coordinatesNulled, deliveriesDeleted, reportsDeleted, eventsDeleted);
+        log.info("Retention completed coordinatesNulled={} deliveriesDeleted={} reportsDeleted={} eventsDeleted={} jsapiErrorsDeleted={}",
+                coordinatesNulled, deliveriesDeleted, reportsDeleted, eventsDeleted, jsapiErrorsDeleted);
+        return new RetentionResult(coordinatesNulled, deliveriesDeleted, reportsDeleted, eventsDeleted, jsapiErrorsDeleted);
     }
 
     public record RetentionResult(
             int coordinatesNulled,
             int deliveriesDeleted,
             int reportsDeleted,
-            int eventsDeleted) {
+            int eventsDeleted,
+            int jsapiErrorsDeleted) {
     }
 }

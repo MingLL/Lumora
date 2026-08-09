@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="cn.minglli.lumora.wechat.JsapiSignatureErrorMapper">
+
+    <resultMap id="jsapiSignatureErrorRecord" type="cn.minglli.lumora.wechat.JsapiSignatureErrorRecord">
+        <constructor>
+            <idArg column="id" javaType="java.lang.Long"/>
+            <arg column="url" javaType="java.lang.String"/>
+            <arg column="err_msg" javaType="java.lang.String"/>
+            <arg column="received_at" javaType="java.time.Instant"/>
+            <arg column="created_at" javaType="java.time.Instant"/>
+        </constructor>
+    </resultMap>
+
+    <insert id="insert" parameterType="cn.minglli.lumora.wechat.JsapiSignatureErrorRecord">
+        INSERT INTO jsapi_signature_error (url, err_msg)
+        VALUES (#{url}, #{errMsg})
+    </insert>
+
+    <delete id="deleteOlderThan">
+        DELETE FROM jsapi_signature_error
+        WHERE received_at &lt; #{cutoff}
+    </delete>
+</mapper>
