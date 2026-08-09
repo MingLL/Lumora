@@ -39,7 +39,7 @@
             #{deliveryId}, #{reportId}, 'AUTO', 'PENDING',
             #{recipientMasked}, #{recipientSha256}
         )
-        ON DUPLICATE KEY UPDATE id = id
+        ON CONFLICT DO NOTHING
     </insert>
 
     <insert id="insertManual">

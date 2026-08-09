@@ -15,7 +15,7 @@ import cn.minglli.lumora.config.LumoraProperties;
 import cn.minglli.lumora.event.EventType;
 import cn.minglli.lumora.event.WechatEvent;
 import cn.minglli.lumora.event.WechatEventRepository;
-import cn.minglli.lumora.support.MySqlContainerTest;
+import cn.minglli.lumora.support.PostgresContainerTest;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -24,7 +24,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-class DailyReportServiceTest extends MySqlContainerTest {
+class DailyReportServiceTest extends PostgresContainerTest {
 
     private static final ZoneId SHANGHAI = ZoneId.of("Asia/Shanghai");
     private static final Clock CLOCK = Clock.fixed(Instant.parse("2026-07-28T02:00:00Z"), SHANGHAI);

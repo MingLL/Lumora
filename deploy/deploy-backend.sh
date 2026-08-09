@@ -165,7 +165,7 @@ ssh "$CONTROL_HOST" "cat > /tmp/lumora-ingress.yaml && sudo $K3S kubectl apply -
   < deploy/k8s/lumora-ingress.yaml
 
 step "等待就绪"
-for d in lumora-backend-web lumora-backend-ops lumora-backend-worker; do
+for d in lumora-backend-web lumora-backend-worker; do
   printf '    %s ' "$d"
   if ssh "$CONTROL_HOST" "sudo $K3S kubectl -n '$NAMESPACE' rollout status deployment/$d --timeout=180s" >/dev/null; then
     printf '✓\n'
@@ -196,6 +196,6 @@ done
 
 printf '\n\033[1;32m后端发布完成：%s\033[0m\n' "$IMAGE"
 printf '手动补发（在服务器上，不走公网）：\n'
-printf '  ssh %s "sudo %s kubectl -n %s exec deployment/lumora-backend-ops -- \\\n' "$CONTROL_HOST" "$K3S" "$NAMESPACE"
+printf '  ssh %s "sudo %s kubectl -n %s exec deployment/lumora-backend-worker -- \\\n' "$CONTROL_HOST" "$K3S" "$NAMESPACE"
 printf '    curl -fsS -X POST http://127.0.0.1:8080/internal/reports/YYYY-MM-DD/send \\\n'
 printf '    -H \x27X-Lumora-Admin-Key: <REPORT_ADMIN_KEY>\x27 -H \x27X-Request-Id: <uuid>\x27"\n'

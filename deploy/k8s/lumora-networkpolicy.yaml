@@ -1,0 +1,102 @@
+# 命名空间内的网络隔离。
+#
+# 这些策略此前只存在于集群里、不在 git 中 —— 也就是说 `kubectl delete ns lumora`
+# 之后（deploy/README.md 的「完整回滚」正是这么写的）所有隔离会静默消失，
+# 而不会有任何东西报错。这次一并纳入仓库。
+#
+# NetworkPolicy 的语义要点：它只作用于被自己 podSelector 选中的 Pod。
+# **没有被任何策略选中的 Pod 是完全不隔离的**，入站全放行。所以「漏写一条」
+# 的表现不是报错，是那个 Pod 悄悄失去保护 —— 2026-08-09 从 MySQL 换到
+# PostgreSQL 时就差点这样：新库标签是 app=lumora-postgres，而原来的
+# lumora-mysql-ingress 选的是 app=lumora-mysql，选不中新库。
+---
+# 数据库只接受后端 Pod 的连接。取代原来的 lumora-mysql-ingress
+# （那条选 app=lumora-mysql、放行 3306，MySQL 下线后即为孤儿，应删除）。
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: lumora-postgres-ingress
+  namespace: lumora
+spec:
+  podSelector:
+    matchLabels:
+      app: lumora-postgres
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app: lumora-backend
+      ports:
+        - port: 5432
+          protocol: TCP
+---
+# web 只接受 Traefik 的入站，端口只开 8080。
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: lumora-backend-web-ingress
+  namespace: lumora
+spec:
+  podSelector:
+    matchLabels:
+      app: lumora-backend
+      role: web
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: traefik
+      ports:
+        - port: 8080
+          protocol: TCP
+---
+# worker 拒绝一切入站（ingress 段留空即为全拒）。
+#
+# 2026-08-09 起 worker 兼任了原 ops 的手动补发端点 /internal/，这条策略因此
+# 更重要而不是更没用：补发的正确用法是 `kubectl exec ... curl 127.0.0.1:8080/...`，
+# 走的是 Pod 内环回，不受 NetworkPolicy 约束；而集群内其它 Pod 想直接打
+# worker 的 /internal/ 会被这条拦住。公网侧另有保障 —— Ingress 只路由
+# /wechat/callback，契约测试对此有断言。
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: lumora-backend-worker-deny-ingress
+  namespace: lumora
+spec:
+  podSelector:
+    matchLabels:
+      app: lumora-backend
+      role: worker
+  policyTypes:
+    - Ingress
+---
+# 前端 nginx 只接受 Traefik 的入站。
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: lumora-web-ingress
+  namespace: lumora
+spec:
+  podSelector:
+    matchLabels:
+      app: lumora-web
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: traefik
+      ports:
+        - port: 80
+          protocol: TCP

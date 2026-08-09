@@ -4,7 +4,7 @@
 #   docker compose --profile migrate up migrate   # one-shot, run before the app
 #   docker compose up -d web worker               # then the long-running services
 #
-# MySQL is never published to the host: only the compose network reaches it.
+# PostgreSQL is never published to the host: only the compose network reaches it.
 
 name: lumora
 
@@ -16,28 +16,27 @@ x-app-image: &app-image
     - path: .env
       required: false
   depends_on:
-    mysql:
+    postgres:
       condition: service_healthy
   restart: unless-stopped
 
 services:
 
-  mysql:
-    image: mysql:8.4
-    command: --default-time-zone=+00:00
+  postgres:
+    image: postgres:17-alpine
+    command: ["-c", "timezone=UTC"]
     environment:
-      MYSQL_DATABASE: ${MYSQL_DATABASE}
-      MYSQL_USER: ${MYSQL_USERNAME}
-      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
-      MYSQL_RANDOM_ROOT_PASSWORD: "yes"
+      POSTGRES_DB: ${POSTGRES_DATABASE}
+      POSTGRES_USER: ${POSTGRES_USERNAME}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
     volumes:
-      - mysql-data:/var/lib/mysql
+      - postgres-data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 --silent"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USERNAME} -d ${POSTGRES_DATABASE} -q"]
       interval: 5s
       timeout: 3s
       retries: 30
-      start_period: 30s
+      start_period: 10s
     restart: unless-stopped
 
   # Expand-only migration. Explicitly one-shot: the application images never
@@ -67,8 +66,11 @@ services:
       retries: 6
       start_period: 40s
 
-  # Exactly one worker. Owns the scheduled jobs; internal sending stays off so it
-  # cannot be driven from outside.
+  # Exactly one worker. Owns the scheduled jobs, and since 2026-08-09 also serves
+  # the manual-resend endpoint: the separate ops container was merged in here to
+  # free ~180 MiB on dev2, which was hitting node-level OOM. Bound to loopback
+  # only; in production the Ingress routes /wechat/callback and nothing else, so
+  # /internal/ stays unreachable from the internet.
   worker:
     <<: *app-image
     environment:
@@ -76,7 +78,9 @@ services:
       SCHEDULING_ENABLED: "true"
       REPORT_RECOVERY_ENABLED: "true"
       RETENTION_ENABLED: "true"
-      INTERNAL_SEND_ENABLED: "false"
+      INTERNAL_SEND_ENABLED: "true"
+    ports:
+      - "127.0.0.1:${OPS_PORT:-8081}:8080"
     healthcheck:
       # Set by WorkerReadinessVerifier only after mode, database and scheduled
       # task checks all pass -- "started" is not the same as "working".
@@ -86,18 +90,5 @@ services:
       retries: 12
       start_period: 40s
 
-  # Operator entry point for manual resends. Bound to loopback only; no public route.
-  ops:
-    <<: *app-image
-    profiles: ["ops"]
-    environment:
-      LUMORA_MODE: serve
-      SCHEDULING_ENABLED: "false"
-      REPORT_RECOVERY_ENABLED: "false"
-      RETENTION_ENABLED: "false"
-      INTERNAL_SEND_ENABLED: "true"
-    ports:
-      - "127.0.0.1:${OPS_PORT:-8081}:8080"
-
 volumes:
-  mysql-data:
+  postgres-data:

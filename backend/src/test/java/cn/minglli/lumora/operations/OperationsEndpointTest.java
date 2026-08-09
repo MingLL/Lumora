@@ -1,6 +1,6 @@
 package cn.minglli.lumora.operations;
 
-import cn.minglli.lumora.support.MySqlContainerTest;
+import cn.minglli.lumora.support.PostgresContainerTest;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
@@ -24,7 +24,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 // @SpringBootTest here would replace it and drop every required property.
 @TestPropertySource(properties = "lumora.scheduling-enabled=false")
 @AutoConfigureMockMvc
-class OperationsEndpointTest extends MySqlContainerTest {
+class OperationsEndpointTest extends PostgresContainerTest {
 
     private static final String YESTERDAY_PATH = "/internal/reports/2026-01-01/send";
 

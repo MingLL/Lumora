@@ -159,7 +159,7 @@
             #{windowStart},
             #{windowEnd},
             #{dataCutoffAt},
-            #{snapshotJson}
+            #{snapshotJson}::jsonb
         )
     </insert>
 

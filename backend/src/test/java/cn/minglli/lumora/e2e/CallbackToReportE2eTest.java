@@ -6,7 +6,7 @@ import java.time.ZoneId;
 
 import cn.minglli.lumora.report.DailyReportService;
 import cn.minglli.lumora.report.DailyReportSnapshot;
-import cn.minglli.lumora.support.MySqlContainerTest;
+import cn.minglli.lumora.support.PostgresContainerTest;
 import me.chanjar.weixin.common.util.crypto.SHA1;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -23,7 +23,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /**
- * The whole path, once: a signed WeChat push arrives, lands in MySQL exactly once
+ * The whole path, once: a signed WeChat push arrives, lands in PostgreSQL exactly once
  * even when WeChat retries it, and shows up in the aggregated snapshot with the
  * counts the daily mail would report.
  *
@@ -42,7 +42,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
         "lumora.retention-enabled=false"
 })
 @AutoConfigureMockMvc
-class CallbackToReportE2eTest extends MySqlContainerTest {
+class CallbackToReportE2eTest extends PostgresContainerTest {
 
     private static final String APP_ID = "wx-app-id";
     private static final String ORIGINAL_ID = "gh_test_original";

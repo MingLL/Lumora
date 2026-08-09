@@ -76,14 +76,16 @@ public class WorkerReadinessVerifier {
     }
 
     /**
-     * A worker owns all background work and nothing else. Internal sending stays
-     * with the operations container so a worker cannot be driven from outside.
+     * A worker owns all background work. Since 2026-08-09 it also serves the internal
+     * send endpoint: the separate ops container was merged away to free ~180 MiB on
+     * dev2, which was hitting node-level OOM. Internal sending is therefore no longer
+     * a disqualifier here. The endpoint stays unreachable from the internet because
+     * the Ingress only routes /wechat/callback; the contract test asserts that.
      */
     private boolean isWorkerMode() {
         return properties.isSchedulingEnabled()
                 && properties.isReportRecoveryEnabled()
-                && properties.isRetentionEnabled()
-                && !properties.isInternalSendEnabled();
+                && properties.isRetentionEnabled();
     }
 
     private boolean databaseIsReachable() {

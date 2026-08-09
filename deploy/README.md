@@ -295,6 +295,25 @@ ssh dev1 'k3s kubectl get pod -A -o json | jq -r ".items[]|select(.status.contai
   schema-smoke Pod 钉到 dev2、dev2 的 limits 从 136% 收到贴合节点容量。
   契约测试新增 6 条断言锁住这些性质。
 
+- **2026-08-09：两次整机 OOM 之后，把 `ops` 并进 `worker`、MySQL 换成
+  PostgreSQL。** 2026-08-08 15:00 和 08-09 15:44，dev2 各发生一次**整机级**
+  OOM：被杀进程的 RSS（三个 JVM 约 178～216 MiB，MySQL 约 484 MiB）都远低于
+  各自 384/768 MiB 的 cgroup limit，证明不是限额触发，而是 1870 MiB 的物理
+  内存本来就装不下 3 个 JVM + MySQL + k3s agent，缓冲不到 400 MiB
+  （查法同上一条：`kubectl get pod -A -o json` 看 `lastState.terminated.reason`
+  是否为 `OOMKilled`，再对比 `top pod` 的 RSS 和清单里的 limits）。MySQL 8.4
+  为 0.3 MB 的业务数据常驻 484 MiB，主因是 `performance_schema=ON` 等独占
+  服务器默认值，跟数据量无关。处置两项：1) 把 `ops` 角色合并进
+  `worker`（`INTERNAL_SEND_ENABLED=true` 随 worker 常开，手动补发改打
+  `deployment/lumora-backend-worker`），省一个 JVM；2) MySQL 8.4 换成
+  PostgreSQL 17（`deploy/k8s/lumora-postgres.yaml`，显式调小
+  `shared_buffers`/`max_connections`/`work_mem`/`maintenance_work_mem`），同样
+  的数据量下 RSS 从约 484 MiB 降到约 100 MiB。两项加起来把 dev2 的 limits
+  合计从 1920 MiB 收到 1152 MiB，见上方内存预算段。顺带确认：数据库数据从来
+  都在 `dev2:/opt/lumora/`，不在 dev1 —— 这一点 MySQL 版文档在 `edab266`
+  就已修正过，PostgreSQL 延续同一路径（`dev2:/opt/lumora/postgres`），dev1
+  上不存在对应目录。
+
 ## 后端发布
 
 ```bash
@@ -303,18 +322,20 @@ ssh dev1 'k3s kubectl get pod -A -o json | jq -r ".items[]|select(.status.contai
 ./deploy/deploy-backend.sh --skip-build # 复用已构建的同名镜像
 ```
 
-同一个镜像跑四种角色，靠环境变量区分，互不抢工作：
+同一个镜像跑三种角色，靠环境变量区分，互不抢工作：
 
 | 角色 | 副本 | 后台任务 | 内部发送 | 公网 |
 |---|---|---|---|---|
 | `migrate` (Job) | 一次性 | — | — | 无 |
 | `web` | 1 | 全关 | 关 | `/wechat/callback/` |
-| `worker` | 1 | 全开 | 关 | 无 |
-| `ops` | 1 | 全关 | 开 | 无，仅 ClusterIP |
+| `worker` | 1 | 全开 | 开 | 无 |
 
-**四种角色全部通过 `nodeSelector` 固定在 `dev2`** —— 三个 Deployment、迁移 Job，
-以及 `deploy-backend.sh` 里那个临时的 schema-smoke Pod。集群内 MySQL 也在 dev2。
-任一节点不可用时，对应工作负载不会自动漂移。
+`ops` 已于 2026-08-09 合并进 `worker`（见下方[变更记录](#变更记录)）：手动补发
+和常规调度现在共用同一个 Pod，`worker` 常驻 `INTERNAL_SEND_ENABLED=true`。
+
+**三种角色全部通过 `nodeSelector` 固定在 `dev2`** —— 两个 Deployment、迁移 Job，
+以及 `deploy-backend.sh` 里那个临时的 schema-smoke Pod。集群内 PostgreSQL 也在
+dev2。任一节点不可用时，对应工作负载不会自动漂移。
 
 把后端整体压在 agent 节点上，是为了让控制面 `dev1` 只干控制面的事：镜像因此
 只分发到 dev2（见[镜像怎么上服务器](#镜像怎么上服务器)），dev1 的磁盘不用在发布时
@@ -324,13 +345,15 @@ ssh dev1 'k3s kubectl get pod -A -o json | jq -r ".items[]|select(.status.contai
 没有镜像的机器上卡在 `ImagePullBackOff`（`imagePullPolicy: IfNotPresent` 加上
 集群没有可用 registry）。契约测试锁住了这几处的一致性。
 
-内存预算按 dev2 的 1870 MiB 物理内存算：三个 Java Deployment 各 requests
-256 MiB / limits 384 MiB，MySQL requests 512 MiB / limits 768 MiB，limits 合计
-1920 MiB。**limits 之和必须贴着节点容量**，否则四个容器同时冲顶会触发内核
-OOM killer —— 它不看 limits 挑谁杀，很可能连 MySQL 一起带走；收紧之后最坏
-情况是单个 Pod 被 OOMKill 再由 Deployment 拉起。改这些数字前先看
-`kubectl -n lumora top pod`（当前实测 RSS：web/worker/ops 约 178～215 MiB，
-MySQL 约 502 MiB），JVM 堆按 `-XX:MaxRAMPercentage=75.0` 跟着 limits 走。
+内存预算按 dev2 的 1870 MiB 物理内存算：`web`、`worker` 两个 Java Deployment
+各 requests 256 MiB / limits 384 MiB，PostgreSQL requests 192 MiB / limits
+384 MiB，limits 合计 1152 MiB。换库/合并角色之前是三个 JVM（web/worker/ops）+
+MySQL，limits 合计 1920 MiB。**limits 之和必须贴着节点容量**，否则容器同时冲顶
+会触发内核 OOM killer —— 它不看 limits 挑谁杀；收紧之后最坏情况是单个 Pod 被
+OOMKill 再由 Deployment/StatefulSet 拉起。2026-08-08、08-09 dev2 各发生过一次
+真正的整机级 OOM（详见下方[变更记录](#变更记录)），就是在旧预算下、缓冲不到
+400 MiB 时踩中的。改这些数字前先看 `kubectl -n lumora top pod`；JVM 堆按
+`-XX:MaxRAMPercentage=75.0` 跟着 limits 走。
 
 **为什么 worker 是 `strategy: Recreate`**：先停旧的再起新的，保证任一时刻最多一个
 调度实例。数据库租约仍是最终保障，但发布过程不该依赖它兜底。worker 的就绪探针查
@@ -350,17 +373,17 @@ scp backend/.env.example dev1:/tmp/env && ssh dev1 \
 
 校验：`ssh dev1 'cd /opt/lumora/backend && bash -s' < backend/deploy/check-env.sh`
 
-数据库：如果已有 MySQL，把 `.env` 的 `MYSQL_HOST` 指过去即可。没有的话用
-`deploy/k8s/lumora-mysql.yaml`（把 `__MYSQL_NODE__` 换成节点名再 apply）。
-它用 hostPath，**线上当前跑在 dev2，数据在 `dev2:/opt/lumora/mysql`**（dev1 上
+数据库：如果已有 PostgreSQL，把 `.env` 的 `POSTGRES_HOST` 指过去即可。没有的话用
+`deploy/k8s/lumora-postgres.yaml`（把 `__PG_NODE__` 换成节点名再 apply）。
+它用 hostPath，**线上当前跑在 dev2，数据在 `dev2:/opt/lumora/postgres`**（dev1 上
 没有这个目录）；hostPath 不跟着 pod 漂移，换节点就等于换了一个空库。备份和加密
 要自己安排，见 [backend/README.md](../backend/README.md) 的 Operating the Database。
 
 注意两个发布脚本都**不会** apply 这份清单，改了它要手动执行：
 
 ```bash
-sed 's/__MYSQL_NODE__/dev2/' deploy/k8s/lumora-mysql.yaml \
-  | ssh dev1 'cat > /tmp/mysql.yaml && sudo /usr/local/bin/k3s kubectl apply -f /tmp/mysql.yaml'
+sed 's/__PG_NODE__/dev2/' deploy/k8s/lumora-postgres.yaml \
+  | ssh dev1 'cat > /tmp/postgres.yaml && sudo /usr/local/bin/k3s kubectl apply -f /tmp/postgres.yaml'
 ```
 
 ### 镜像怎么上服务器
@@ -404,10 +427,11 @@ ssh dev1 'sudo k3s kubectl -n lumora rollout undo deployment/lumora-backend-web'
 
 ### 手动补发日报
 
-`ops` 容器没有公网路由，只能在服务器上调：
+`worker` 没有公网路由，只能在服务器上调（2026-08-09 起 `ops` 已合并进
+`worker`，手动补发跟常规调度共用同一个 Pod）：
 
 ```bash
-ssh dev1 "sudo k3s kubectl -n lumora exec deployment/lumora-backend-ops -- \
+ssh dev1 "sudo k3s kubectl -n lumora exec deployment/lumora-backend-worker -- \
   curl -fsS -X POST http://127.0.0.1:8080/internal/reports/2026-07-28/send \
   -H 'X-Lumora-Admin-Key: <REPORT_ADMIN_KEY>' -H 'X-Request-Id: $(uuidgen)'"
 ```
@@ -423,3 +447,19 @@ bash deploy/tests/deploy_contract_test.sh
 
 用假的 docker/ssh/scp/curl 跑一遍，断言迁移早于 apply、校验早于分发、预检失败时
 不产生任何变更、以及输出里不出现 `.env` 的内容。
+
+### 改了 Flyway 迁移之后
+
+```bash
+bash deploy/tests/verify-migrations.sh /path/to/Lumora-postgres
+```
+
+在 k3s 里起一个一次性 PostgreSQL（借 dev2 算力，default 命名空间，不碰
+`lumora`，跑完自动删干净），把 `V1__create_event_and_report_tables.sql` 和
+`V2__index_received_at_and_widen_raw_event_key.sql` 真实执行一遍，断言：表和
+索引都按预期建出来、生成列 `auto_report_id` 按 `trigger_type` 正确取值、
+`updated_at` 触发器在 `UPDATE` 时真的会刷新、显式插入主键后 `setval` 能让
+IDENTITY 序列正常接续（数据迁移脚本依赖这个行为）、重复的 AUTO 行会被
+`uq_auto_report` 拦下、`varchar` 参数绑定不到 `jsonb` 列会被拒绝（证明 mapper
+里的显式 `::jsonb` 转换不能省）。这是在真实 DDL 上跑的验证，能在发布前而不是
+发布时抓住 SQL 语法或约束错误——新增或修改 Flyway 迁移时应该跑一次。

@@ -9,7 +9,7 @@ WeChat Official Account daily reporting service. Receives WeChat callback events
 ## Tech Stack
 
 - **Java 17** + **Spring Boot 3.3**
-- **MyBatis** + **Flyway** (MySQL)
+- **MyBatis** + **Flyway** (PostgreSQL)
 - **Testcontainers** for integration testing
 - **Docker** containerization
 
@@ -29,7 +29,7 @@ WeChat Official Account daily reporting service. Receives WeChat callback events
 # Build (no Maven wrapper in this repo — use a local mvn 3.9+)
 mvn -DskipTests package
 
-# Test (needs Docker: Testcontainers starts a MySQL instance)
+# Test (needs Docker: Testcontainers starts a PostgreSQL instance)
 mvn test
 
 # Run as a container. Tag it `lumora:local` -- that is the name `compose.yaml`
@@ -77,8 +77,8 @@ To confirm the whole path works, unfollow and re-follow the test account, then
 check the events landed:
 
 ```bash
-docker compose exec mysql mysql -ulumora -plumora lumora \
-  -e "SELECT id, event_type, raw_event, original_occurred_at FROM wechat_event ORDER BY id;"
+docker compose exec postgres psql -U lumora -d lumora \
+  -c "SELECT id, event_type, raw_event, original_occurred_at FROM wechat_event ORDER BY id;"
 ```
 
 Sending a chat message proves nothing here - `WechatEventNormalizer` only
@@ -105,11 +105,11 @@ startup naming the missing variable. See `.env.example` for the full list.
 | `WECHAT_ORIGINAL_ID` | — | Official Account original ID (`gh_…`), checked against `ToUserName` |
 | `WECHAT_TOKEN` | — | WeChat callback token |
 | `WECHAT_AES_KEY` | — | WeChat AES encoding key (safe mode) |
-| `MYSQL_HOST` | — | MySQL host |
-| `MYSQL_PORT` | `3306` | MySQL port |
-| `MYSQL_DATABASE` | — | Database name |
-| `MYSQL_USERNAME` | — | Application database user (DML only) |
-| `MYSQL_PASSWORD` | — | Application database password |
+| `POSTGRES_HOST` | — | PostgreSQL host |
+| `POSTGRES_PORT` | `5432` | PostgreSQL port |
+| `POSTGRES_DATABASE` | — | Database name |
+| `POSTGRES_USERNAME` | — | Application database user (DML only) |
+| `POSTGRES_PASSWORD` | — | Application database password |
 | `MAIL_USERNAME` | — | QQ email address, also the From address |
 | `MAIL_AUTH_CODE` | — | QQ email authorization code (not the account password) |
 | `MAIL_FROM_NAME` | `Lumora` | Display name on outgoing mail |
@@ -122,8 +122,8 @@ startup naming the missing variable. See `.env.example` for the full list.
 | `INTERNAL_SEND_ENABLED` | `true` | When false, `/internal/reports/{date}/send` returns 503 |
 | `WORKER_READY_MARKER` | `/tmp/lumora-worker-ready` | File the worker readiness probe checks |
 | `LUMORA_MODE` | `serve` | Startup mode: `serve`, `migrate`, or `schema-smoke` |
-| `MIGRATION_MYSQL_USERNAME` | `MYSQL_USERNAME` | DDL user, used only by `LUMORA_MODE=migrate` |
-| `MIGRATION_MYSQL_PASSWORD` | `MYSQL_PASSWORD` | Password for the DDL user |
+| `MIGRATION_POSTGRES_USERNAME` | `POSTGRES_USERNAME` | DDL user, used only by `LUMORA_MODE=migrate` |
+| `MIGRATION_POSTGRES_PASSWORD` | `POSTGRES_PASSWORD` | Password for the DDL user |
 
 The four `*_ENABLED` flags exist so a candidate container can serve callbacks
 without competing for background work or sending mail. Turn them off on every
@@ -146,10 +146,12 @@ curl -X POST http://127.0.0.1:8081/internal/reports/2026-07-29/send \
   time, and a length mismatch still runs a dummy compare so response timing
   leaks nothing about the expected length.
 - `INTERNAL_SEND_ENABLED=false` → `503`, regardless of headers. This is a
-  separate gate from the key: `web` and `worker` both keep it off, so use the
-  `ops` profile, which enables it and binds to loopback only:
+  separate gate from the key: `web` keeps it off, but `worker` runs with
+  `INTERNAL_SEND_ENABLED=true` and binds to loopback only, so target it
+  instead (the standalone `ops` container was merged into `worker` on
+  2026-08-09):
   ```bash
-  docker compose --profile ops up -d ops
+  docker compose up -d worker
   ```
 
 Everything under `/internal/**` is covered by the interceptor via a path
@@ -175,8 +177,16 @@ has stopped and the rollback window has passed.
 
 - Give the application user DML only (`SELECT`, `INSERT`, `UPDATE`, `DELETE`).
   DDL belongs to the separate migration user configured via
-  `MIGRATION_MYSQL_USERNAME` / `MIGRATION_MYSQL_PASSWORD`.
-- Encrypt the database volume and every backup. Keep backups 30 days.
+  `MIGRATION_POSTGRES_USERNAME` / `MIGRATION_POSTGRES_PASSWORD`.
+- Encrypt the database volume and every backup. Keep backups 30 days. In
+  production the data lives in a `hostPath` volume pinned to `dev2`, at
+  `/opt/lumora/postgres` (see `deploy/k8s/lumora-postgres.yaml`) — back up
+  that host/path, not `dev1`; the volume does not follow the pod if it is
+  rescheduled. A logical backup:
+  ```bash
+  ssh dev1 "sudo /usr/local/bin/k3s kubectl -n lumora exec statefulset/lumora-postgres -- \
+    pg_dump -U <POSTGRES_USERNAME> -d <POSTGRES_DATABASE> -Fc" > "lumora-$(date +%F).dump"
+  ```
 - Rehearse restores on controlled infrastructure only. Never copy a production
   backup to a personal machine or any non-production environment.
 - Operators access production through an audited account, temporarily — not

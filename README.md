@@ -5,7 +5,7 @@
 
 ```text
 frontend/     Astro 静态站（组件、字体子集脚本）
-backend/      Spring Boot 服务（微信回调、日报、MySQL）
+backend/      Spring Boot 服务（微信回调、日报、PostgreSQL）
 deploy/       前后端的 k3s 部署清单、发布脚本与契约测试
 scripts/      运维脚本（nginx 访问日报）与内容仓库的挂载脚本
 docs/         设计与方案文档
@@ -29,7 +29,7 @@ content/      文章正文与配图，来自私有仓库，不在本仓库里（
 
 | | frontend | backend |
 |---|---|---|
-| 技术栈 | Astro 7 + TypeScript + Tailwind 4 | Java 17 + Spring Boot 3.3 + MyBatis + Flyway |
+| 技术栈 | Astro 7 + TypeScript + Tailwind 4 | Java 17 + Spring Boot 3.3 + MyBatis + Flyway + PostgreSQL |
 | 产物 | 纯静态 `dist/` | 可执行 jar / Docker 镜像 |
 | 部署 | 本地构建 → rsync 到 dev1/dev2 → k3s 里的 nginx | 本地构建镜像 → ctr import → k3s |
 | 说明 | [frontend/README.md](frontend/README.md) | [backend/README.md](backend/README.md) |
@@ -55,7 +55,7 @@ cd backend
 mvn -DskipTests package
 ```
 
-后端跑测试需要 Docker（Testcontainers 会拉起 MySQL）。
+后端跑测试需要 Docker（Testcontainers 会拉起 PostgreSQL）。
 
 ## 发布
 

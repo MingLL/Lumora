@@ -73,14 +73,20 @@ class WorkerReadinessVerifierTest {
     }
 
     @Test
-    void anOperationsInstanceIsNotAWorkerEvenWithSchedulingOn() {
-        // Operations keeps internal sending; the worker must not.
+    void aWorkerThatAlsoServesInternalSendsIsStillAWorker() {
+        // Until 2026-08-09 this asserted the opposite: internal sending belonged to a
+        // separate ops container, so a worker with the flag on was disqualified. That
+        // container was merged into the worker to free ~180 MiB on dev2, which was
+        // hitting node-level OOM, so the flag no longer says anything about the role.
+        // Keeping the assertion as a positive one matters: if someone reinstates the
+        // old disqualifier, the worker silently stops publishing its readiness marker
+        // and every rollout hangs on a probe that can never pass.
         properties.setInternalSendEnabled(true);
 
         boolean verified = verifier(allTasks(), () -> { }).verify();
 
-        assertThat(verified).isFalse();
-        assertThat(marker).doesNotExist();
+        assertThat(verified).isTrue();
+        assertThat(marker).exists();
     }
 
     @Test
