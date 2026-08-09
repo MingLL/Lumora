@@ -5,26 +5,21 @@
 #   migrate  Job          发布前一次性跑 Flyway，应用永不隐式迁移
 #   web      Deployment   只接微信回调，四个后台开关全 false
 #   worker   Deployment   唯一的调度实例，replicas 恒为 1
-#   ops      Deployment   手动补发入口，只有 ClusterIP，公网无路由
 #
 # 凭据不在本文件里。deploy/deploy-backend.sh 从服务器上的 .env 生成
 # Secret/lumora-env，本文件只引用它。
 #
-# 内存预算（三个 Deployment 加 MySQL 全在 dev2，物理内存 1870 Mi）：
+# 内存预算（两个 Deployment 加 PostgreSQL 全在 dev2，物理内存 1870 Mi）：
 #
-#   web / worker / ops   requests 256Mi   limits 384Mi   ×3
-#   lumora-mysql         requests 512Mi   limits 768Mi        （见 lumora-mysql.yaml）
+#   web / worker         requests 256Mi   limits 384Mi   ×2
+#   lumora-postgres      requests 192Mi   limits 384Mi        （见 lumora-postgres.yaml）
 #   ─────────────────────────────────────────────────────
-#   合计                 requests 1280Mi  limits 1920Mi
+#   合计                 requests 704Mi   limits 1152Mi
 #
-# limits 之前是 512Mi×3 + 1Gi = 2560Mi，占节点 136%：四个容器同时冲到上限
-# 就会触发内核 OOM killer，而它挑谁杀不看 limits，很可能连 MySQL 一起带走。
-# 收到 384Mi 后总量落回节点容量附近，最坏情况变成单个 Pod 被 OOMKill、
-# 由 Deployment 拉起，而不是整个节点崩掉。
-#
-# 384Mi 对 JVM 是够的：Dockerfile 设 -XX:MaxRAMPercentage=75.0，堆上限
-# 288Mi，非堆约 96Mi；三个进程实测 RSS 是 178 / 185 / 215 Mi。改这个数之前
-# 先看 `kubectl -n lumora top pod`，别让实测值贴到上限。
+# 2026-08-08/09 dev2 发生过两次整机 OOM：被杀进程的 RSS 都远低于各自 limit，
+# 说明不是 cgroup 限额触发，而是 3 个 JVM + MySQL 根本装不下。这一版把 ops 合并
+# 进 worker（省一个 JVM）并用 PostgreSQL 取代 MySQL（484 Mi → 约 100 Mi），
+# limits 合计从 1920 Mi 降到 1152 Mi，节点终于有了真正的余量。
 ---
 apiVersion: v1
 kind: Service
@@ -35,21 +30,6 @@ spec:
   selector:
     app: lumora-backend
     role: web
-  ports:
-    - name: http
-      port: 8080
-      targetPort: http
----
-# ops 只在集群内可达，故意不给 Ingress。
-apiVersion: v1
-kind: Service
-metadata:
-  name: lumora-backend-ops
-  namespace: lumora
-spec:
-  selector:
-    app: lumora-backend
-    role: ops
   ports:
     - name: http
       port: 8080
@@ -104,8 +84,10 @@ spec:
       annotations:
         lumora/manifest-hash: "__MANIFEST_HASH__"
     spec:
-      # 避免 Service/lumora-mysql 自动注入 LUMORA_MYSQL_PORT=tcp://...，
-      # 与 Spring 的整数配置 lumora.mysql-port 冲突。服务发现统一走 DNS。
+      # 避免 Service 注入的 LUMORA_POSTGRES_PORT=tcp://... 覆盖配置属性。
+      # 机制是 Spring 的宽松绑定：环境变量 LUMORA_POSTGRES_PORT 正好映射到
+      # lumora.postgres-port。换库前是 lumora-mysql/LUMORA_MYSQL_PORT 撞
+      # lumora.mysql-port，改名之后这个陷阱原样复现，所以这行必须保留。
       enableServiceLinks: false
       nodeSelector:
         kubernetes.io/hostname: dev2
@@ -205,9 +187,9 @@ spec:
               value: "true"
             - name: RETENTION_ENABLED
               value: "true"
-            # worker 不开内部发送：补发是 ops 的职责，worker 不能被外部驱动。
+            # ops 容器已于 2026-08-09 合并进来，手动补发改在 worker 上执行。
             - name: INTERNAL_SEND_ENABLED
-              value: "false"
+              value: "true"
           ports:
             - name: http
               containerPort: 8080
@@ -232,70 +214,6 @@ spec:
               port: http
             initialDelaySeconds: 60
             periodSeconds: 30
-          securityContext:
-            allowPrivilegeEscalation: false
-            capabilities:
-              drop: ["ALL"]
----
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: lumora-backend-ops
-  namespace: lumora
-  labels:
-    app: lumora-backend
-    role: ops
-spec:
-  replicas: 1
-  selector:
-    matchLabels:
-      app: lumora-backend
-      role: ops
-  template:
-    metadata:
-      labels:
-        app: lumora-backend
-        role: ops
-      annotations:
-        lumora/manifest-hash: "__MANIFEST_HASH__"
-    spec:
-      enableServiceLinks: false
-      nodeSelector:
-        kubernetes.io/hostname: dev2
-      containers:
-        - name: lumora
-          image: __IMAGE__
-          imagePullPolicy: IfNotPresent
-          envFrom:
-            - secretRef:
-                name: lumora-env
-          env:
-            - name: LUMORA_MODE
-              value: "serve"
-            - name: SCHEDULING_ENABLED
-              value: "false"
-            - name: REPORT_RECOVERY_ENABLED
-              value: "false"
-            - name: RETENTION_ENABLED
-              value: "false"
-            - name: INTERNAL_SEND_ENABLED
-              value: "true"
-          ports:
-            - name: http
-              containerPort: 8080
-          resources:
-            requests:
-              cpu: 50m
-              memory: 256Mi
-            limits:
-              cpu: "1"
-              memory: 384Mi
-          readinessProbe:
-            httpGet:
-              path: /actuator/health/readiness
-              port: http
-            initialDelaySeconds: 20
-            periodSeconds: 10
           securityContext:
             allowPrivilegeEscalation: false
             capabilities:

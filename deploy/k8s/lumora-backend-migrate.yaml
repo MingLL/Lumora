@@ -32,8 +32,10 @@ spec:
       # 调度器可能把迁移放到 dev1，然后卡在 ImagePullBackOff，整个发布停在第 5 步。
       nodeSelector:
         kubernetes.io/hostname: dev2
-      # 避免 Service/lumora-mysql 注入 LUMORA_MYSQL_PORT=tcp://...，
-      # 覆盖应用期望的整数 MYSQL_PORT。
+      # 避免 Service 注入的 LUMORA_POSTGRES_PORT=tcp://... 覆盖配置属性。
+      # 机制是 Spring 的宽松绑定：环境变量 LUMORA_POSTGRES_PORT 正好映射到
+      # lumora.postgres-port。换库前是 lumora-mysql/LUMORA_MYSQL_PORT 撞
+      # lumora.mysql-port，改名之后这个陷阱原样复现，所以这行必须保留。
       enableServiceLinks: false
       containers:
         - name: migrate
