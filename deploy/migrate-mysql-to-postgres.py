@@ -78,7 +78,10 @@ def main():
 
     pg.commit()
 
-    # 校验：逐表比对行数，不一致就整体回滚已经来不及，所以只报错让人工介入。
+    # 校验跑在 commit 之后，所以这里发现问题已经回滚不掉了 —— 数据是活的。
+    # 这跟「插入阶段失败」是完全不同的处境，退出信息必须让人一眼看出区别，
+    # 否则运维在停机窗口里的第一反应会是「重跑一遍」，而重跑必然撞主键冲突。
+    mismatched = []
     with my.cursor() as mc, pg.cursor() as pc:
         for table, _ in TABLES:
             mc.execute(f"SELECT COUNT(*) AS n FROM {table}")
@@ -88,10 +91,32 @@ def main():
             status = "ok" if source == target else "MISMATCH"
             print(f"verify {table}: mysql={source} postgres={target} {status}")
             if source != target:
-                sys.exit(1)
+                mismatched.append((table, source, target))
+
+    if mismatched:
+        print(
+            "\n数据已经提交到 PostgreSQL，不是「什么都没发生」——不要直接重跑。\n"
+            "行数对不上最常见的原因是搬运期间 MySQL 仍在被写入，也就是应用没有真正停干净。\n"
+            "重跑前必须先按外键反序清空目标库，否则会撞一片主键冲突：\n"
+            "  TRUNCATE report_delivery_attempt, daily_report, wechat_event RESTART IDENTITY CASCADE;\n"
+            "对不上的表：" + ", ".join(f"{t}(mysql={s} pg={d})" for t, s, d in mismatched),
+            file=sys.stderr,
+        )
+        sys.exit(2)
 
     print("migration complete")
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except Exception as exception:  # noqa: BLE001 - 一次性脚本，这里只负责把处境说清楚
+        # 插入阶段的异常发生在 pg.commit() 之前，事务从未提交，连接销毁时
+        # PostgreSQL 会整体回滚。目标库仍是空的，直接修掉原因重跑即可。
+        print(f"\n迁移失败：{exception}", file=sys.stderr)
+        print(
+            "失败发生在提交之前，PostgreSQL 已整体回滚，目标库没有留下任何半截数据。\n"
+            "修掉原因后可以直接重跑，不需要先清空。",
+            file=sys.stderr,
+        )
+        sys.exit(1)
