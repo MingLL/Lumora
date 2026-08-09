@@ -15,8 +15,11 @@ IMAGE=public.ecr.aws/docker/library/postgres:17-alpine
 step() { printf '\n\033[1;34m==>\033[0m %s\n' "$*"; }
 fail() { printf '\033[1;31m失败:\033[0m %s\n' "$*" >&2; exit 1; }
 
-[[ -f "$MIG/V1__create_event_and_report_tables.sql" ]] || fail "找不到 V1"
-[[ -f "$MIG/V2__index_received_at_and_widen_raw_event_key.sql" ]] || fail "找不到 V2"
+# 按版本号排序取全部迁移，不写死文件名 —— 写死的话每新增一个迁移就漏一个，
+# 而漏掉的恰恰是最新、最没被验证过的那个。sort -V 让 V10 排在 V9 之后而不是 V1 之后。
+MIGRATIONS=()
+while IFS= read -r file; do MIGRATIONS+=("$file"); done < <(ls "$MIG"/V*.sql 2>/dev/null | sort -V)
+(( ${#MIGRATIONS[@]} )) || fail "在 $MIG 下找不到任何迁移"
 
 cleanup() {
   ssh -o BatchMode=yes dev1 "sudo $K kubectl delete pod $POD --ignore-not-found --force --grace-period=0" >/dev/null 2>&1 || true
@@ -36,13 +39,14 @@ ssh -o BatchMode=yes dev1 "for i in \$(seq 30); do \
   sudo $K kubectl exec $POD -- pg_isready -q -U lumora && exit 0; sleep 2; done; exit 1" \
   || fail "PostgreSQL 起不来"
 
-step "应用 V1"
-ssh -o BatchMode=yes dev1 "sudo $K kubectl exec -i $POD -- psql -v ON_ERROR_STOP=1 -U lumora -d lumora" \
-  < "$MIG/V1__create_event_and_report_tables.sql" || fail "V1 执行失败"
-
-step "应用 V2"
-ssh -o BatchMode=yes dev1 "sudo $K kubectl exec -i $POD -- psql -v ON_ERROR_STOP=1 -U lumora -d lumora" \
-  < "$MIG/V2__index_received_at_and_widen_raw_event_key.sql" || fail "V2 执行失败"
+step "依次应用 ${#MIGRATIONS[@]} 个迁移"
+for migration in "${MIGRATIONS[@]}"; do
+  name="${migration##*/}"
+  printf '    %s ' "$name"
+  ssh -o BatchMode=yes dev1 "sudo $K kubectl exec -i $POD -- psql -v ON_ERROR_STOP=1 -U lumora -d lumora" \
+    < "$migration" >/dev/null || fail "$name 执行失败"
+  printf '✓\n'
+done
 
 step "核对结果"
 ssh -o BatchMode=yes dev1 "sudo $K kubectl exec -i $POD -- psql -U lumora -d lumora -X" <<'SQL'
