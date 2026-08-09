@@ -42,7 +42,7 @@ class LumoraPropertiesTest {
         LumoraProperties properties = bind(validProperties());
 
         assertThat(properties.getWechatAppId()).isEqualTo("wx-app-id");
-        assertThat(properties.getMysqlPort()).isEqualTo(3307);
+        assertThat(properties.getPostgresPort()).isEqualTo(3307);
         assertThat(properties.getReportRecipients())
                 .containsExactly("owner@example.com", "ops@example.com");
     }
@@ -104,11 +104,11 @@ class LumoraPropertiesTest {
         values.put("lumora.wechat-token", "wechat-token");
         values.put("lumora.wechat-aes-key", "abcdefghijklmnopqrstuvwxyz0123456789ABCDEFG");
         values.put("lumora.wechat-app-secret", "wechat-app-secret");
-        values.put("lumora.mysql-host", "localhost");
-        values.put("lumora.mysql-port", "3307");
-        values.put("lumora.mysql-database", "lumora");
-        values.put("lumora.mysql-username", "lumora_user");
-        values.put("lumora.mysql-password", "secret");
+        values.put("lumora.postgres-host", "localhost");
+        values.put("lumora.postgres-port", "3307");
+        values.put("lumora.postgres-database", "lumora");
+        values.put("lumora.postgres-username", "lumora_user");
+        values.put("lumora.postgres-password", "secret");
         values.put("lumora.mail-username", "sender@qq.com");
         values.put("lumora.mail-auth-code", "mail-auth-code");
         values.put("lumora.report-recipients", "owner@example.com,ops@example.com");
@@ -123,11 +123,11 @@ class LumoraPropertiesTest {
                 Arguments.of("lumora.wechat-token", "WECHAT_TOKEN"),
                 Arguments.of("lumora.wechat-aes-key", "WECHAT_AES_KEY"),
                 Arguments.of("lumora.wechat-app-secret", "WECHAT_APP_SECRET"),
-                Arguments.of("lumora.mysql-host", "MYSQL_HOST"),
-                Arguments.of("lumora.mysql-port", "MYSQL_PORT"),
-                Arguments.of("lumora.mysql-database", "MYSQL_DATABASE"),
-                Arguments.of("lumora.mysql-username", "MYSQL_USERNAME"),
-                Arguments.of("lumora.mysql-password", "MYSQL_PASSWORD"),
+                Arguments.of("lumora.postgres-host", "POSTGRES_HOST"),
+                Arguments.of("lumora.postgres-port", "POSTGRES_PORT"),
+                Arguments.of("lumora.postgres-database", "POSTGRES_DATABASE"),
+                Arguments.of("lumora.postgres-username", "POSTGRES_USERNAME"),
+                Arguments.of("lumora.postgres-password", "POSTGRES_PASSWORD"),
                 Arguments.of("lumora.mail-username", "MAIL_USERNAME"),
                 Arguments.of("lumora.mail-auth-code", "MAIL_AUTH_CODE"),
                 Arguments.of("lumora.report-recipients", "REPORT_RECIPIENTS"),

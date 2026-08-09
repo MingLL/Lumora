@@ -5,7 +5,7 @@ import org.junit.jupiter.api.BeforeAll;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
-import org.testcontainers.containers.MySQLContainer;
+import org.testcontainers.containers.PostgreSQLContainer;
 
 @SpringBootTest(properties = {
         "lumora.wechat-app-id=wx-app-id",
@@ -13,18 +13,18 @@ import org.testcontainers.containers.MySQLContainer;
         "lumora.wechat-token=wechat-token",
         "lumora.wechat-aes-key=abcdefghijklmnopqrstuvwxyz0123456789ABCDEFG",
         "lumora.wechat-app-secret=wechat-app-secret",
-        "lumora.mysql-host=localhost",
-        "lumora.mysql-port=3306",
-        "lumora.mysql-database=lumora",
-        "lumora.mysql-username=lumora",
-        "lumora.mysql-password=lumora",
+        "lumora.postgres-host=localhost",
+        "lumora.postgres-port=5432",
+        "lumora.postgres-database=lumora",
+        "lumora.postgres-username=lumora",
+        "lumora.postgres-password=lumora",
         "lumora.mail-username=sender@qq.com",
         "lumora.mail-auth-code=mail-auth-code",
         "lumora.report-recipients=owner@example.com",
         "lumora.report-admin-key=admin-secret",
         "spring.flyway.enabled=false"
 })
-public abstract class MySqlContainerTest {
+public abstract class PostgresContainerTest {
 
     /**
      * Singleton container, started once for the whole JVM and never stopped here.
@@ -36,31 +36,27 @@ public abstract class MySqlContainerTest {
      * fail with "Connection refused" 30 seconds at a time. Ryuk removes the container
      * when the JVM exits.
      */
-    protected static final MySQLContainer<?> MYSQL = new MySQLContainer<>("mysql:8.4")
+    protected static final PostgreSQLContainer<?> POSTGRES = new PostgreSQLContainer<>("postgres:17-alpine")
             .withDatabaseName("lumora")
             .withUsername("lumora")
-            .withPassword("lumora")
-            .withCommand("--default-time-zone=+00:00");
+            .withPassword("lumora");
 
     static {
-        MYSQL.start();
+        POSTGRES.start();
     }
 
     @DynamicPropertySource
-    static void mysqlProperties(DynamicPropertyRegistry registry) {
-        registry.add("spring.datasource.url", () -> MYSQL.getJdbcUrl()
-                + "?connectionTimeZone=UTC&forceConnectionTimeZoneToSession=true");
-        registry.add("spring.datasource.username", MYSQL::getUsername);
-        registry.add("spring.datasource.password", MYSQL::getPassword);
-        registry.add("spring.datasource.hikari.connection-init-sql", () -> "SET time_zone = '+00:00'");
+    static void postgresProperties(DynamicPropertyRegistry registry) {
+        registry.add("spring.datasource.url", POSTGRES::getJdbcUrl);
+        registry.add("spring.datasource.username", POSTGRES::getUsername);
+        registry.add("spring.datasource.password", POSTGRES::getPassword);
+        registry.add("spring.datasource.hikari.connection-init-sql", () -> "SET TIME ZONE 'UTC'");
     }
 
     @BeforeAll
     static void migrateDatabase() {
         Flyway.configure()
-                .dataSource(MYSQL.getJdbcUrl()
-                                + "?connectionTimeZone=UTC&forceConnectionTimeZoneToSession=true",
-                        MYSQL.getUsername(), MYSQL.getPassword())
+                .dataSource(POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword())
                 .locations("classpath:db/migration")
                 .load()
                 .migrate();
