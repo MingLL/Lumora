@@ -5,6 +5,7 @@
 #   ./deploy/deploy-backend.sh                 用当前 git commit 当镜像 tag
 #   ./deploy/deploy-backend.sh v20260729       指定 tag
 #   ./deploy/deploy-backend.sh --skip-build    复用已构建好的同名镜像
+#   ./deploy/deploy-backend.sh --allow-behind  本地落后远端时仍然发布（见下方预检）
 #
 # 跟 deploy.sh（前端静态站）互不影响，两者共用 lumora 命名空间和 Traefik 入口。
 #
@@ -39,14 +40,37 @@ info() { printf '    %s\n' "$*"; }
 fail() { printf '\033[1;31m错误:\033[0m %s\n' "$*" >&2; exit 1; }
 
 skip_build=false
+allow_behind=false
 tag=""
 for arg in "$@"; do
   case "$arg" in
     --skip-build) skip_build=true ;;
+    --allow-behind) allow_behind=true ;;
     -*) fail "未知参数：$arg" ;;
     *) tag="$arg" ;;
   esac
 done
+
+# 清单同样取自当前工作树，落后远端就等于拿旧清单覆盖线上。
+# 事故经过见 deploy.sh 里同一处注释（2026-08-09，前端发布删掉了微信验证文件）。
+step "预检：本地是否落后远端"
+if upstream=$(git rev-parse --abbrev-ref --symbolic-full-name '@{upstream}' 2>/dev/null); then
+  if git fetch --quiet origin 2>/dev/null; then
+    behind=$(git rev-list --count "HEAD..$upstream" 2>/dev/null || echo 0)
+    if [[ "$behind" -gt 0 ]]; then
+      [[ "$allow_behind" == true ]] \
+        && printf '    \033[1;33m落后 %s %s 个提交，--allow-behind 已放行\033[0m\n' "$upstream" "$behind" \
+        || fail "本地落后 $upstream $behind 个提交，发布会用旧清单覆盖线上。
+      先 git rebase $upstream 再发；确认无碍可加 --allow-behind。"
+    else
+      info "与 $upstream 一致"
+    fi
+  else
+    printf '    \033[1;33mgit fetch 失败，无法判断是否落后，继续发布\033[0m\n'
+  fi
+else
+  info "当前分支没有上游，跳过"
+fi
 
 # 不可变 tag：默认取 git commit，脏工作区拒绝发布，免得线上镜像对不上任何一个提交。
 if [[ -z "$tag" ]]; then

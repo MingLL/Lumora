@@ -2,8 +2,9 @@
 #
 # 一键发布：本地构建 → 同步到两台服务器 → 应用 k8s 清单
 #
-#   ./deploy/deploy.sh                只发内容（默认，先构建）
-#   ./deploy/deploy.sh --skip-build   跳过构建，直接发已有的 frontend/dist/
+#   ./deploy/deploy.sh                  只发内容（默认，先构建）
+#   ./deploy/deploy.sh --skip-build     跳过构建，直接发已有的 frontend/dist/
+#   ./deploy/deploy.sh --allow-behind   本地落后远端时仍然发布（见下方预检）
 #
 # 只管前端静态站，跟 backend/ 无关 —— 后端是独立的 Spring Boot 容器。
 # 站点是纯静态的，服务器上不需要 Node —— 构建在本地完成，只把 dist/ 推上去。
@@ -23,7 +24,43 @@ step() { printf '\n\033[1;34m==>\033[0m %s\n' "$*"; }
 fail() { printf '\033[1;31m错误:\033[0m %s\n' "$*" >&2; exit 1; }
 
 skip_build=false
-[[ "${1:-}" == "--skip-build" ]] && skip_build=true
+allow_behind=false
+for arg in "$@"; do
+  case "$arg" in
+    --skip-build)   skip_build=true ;;
+    --allow-behind) allow_behind=true ;;
+    *) fail "未知参数：$arg" ;;
+  esac
+done
+
+# 发布内容全部取自当前工作树：rsync --delete 让服务器与本地 dist/ 严格一致，
+# kubectl apply 用的也是本地清单。所以「本地落后远端」等于拿旧代码覆盖线上。
+#
+# 2026-08-09 就这么翻过车：在一份落后 origin/main 10 个提交的树上发布，--delete
+# 删掉了微信域名验证文件 MP_verify_*.txt（线上直接 404），站点里的微信 JS-SDK
+# 整个消失，apply 还把线上 CSP 退回了旧版（丢掉 res.wx.qq.com 放行）。
+# git status 显示的「落后 N 个提交」只有 fetch 过才准，所以这里主动 fetch。
+step "预检：本地是否落后远端"
+if upstream=$(git rev-parse --abbrev-ref --symbolic-full-name '@{upstream}' 2>/dev/null); then
+  if git fetch --quiet origin 2>/dev/null; then
+    behind=$(git rev-list --count "HEAD..$upstream" 2>/dev/null || echo 0)
+    if [[ "$behind" -gt 0 ]]; then
+      if [[ "$allow_behind" == true ]]; then
+        printf '    \033[1;33m落后 %s %s 个提交，--allow-behind 已放行\033[0m\n' "$upstream" "$behind"
+      else
+        fail "本地落后 $upstream $behind 个提交，发布会用旧代码覆盖线上。
+      先 git rebase $upstream 再发；确认无碍可加 --allow-behind。"
+      fi
+    else
+      printf '    与 %s 一致\n' "$upstream"
+    fi
+  else
+    # 取不到远端就无法判断。不阻断（可能只是临时网络问题），但要看得见。
+    printf '    \033[1;33mgit fetch 失败，无法判断是否落后，继续发布\033[0m\n'
+  fi
+else
+  printf '    当前分支没有上游，跳过\n'
+fi
 
 if [[ "$skip_build" == false ]]; then
   step "本地构建"
