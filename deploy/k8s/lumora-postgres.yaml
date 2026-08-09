@@ -102,7 +102,11 @@ spec:
           livenessProbe:
             exec:
               command: ["pg_isready", "-h", "127.0.0.1", "-q"]
-            initialDelaySeconds: 30
+            # 60 而不是 30：首次启动要在 hostPath 上跑 initdb，而这台机器内存紧张。
+            # liveness 只在服务器卡死时才有价值，启动阶段多给的宽限期是白送的；
+            # 探针早杀一次就会变成 initdb 半途被打断、反复重启。就绪由上面的
+            # readinessProbe 判断，它 10 秒就开始探，不受这个值影响。
+            initialDelaySeconds: 60
             periodSeconds: 30
           securityContext:
             allowPrivilegeEscalation: false
