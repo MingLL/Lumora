@@ -145,7 +145,7 @@ tls_resolver=$(
     $0 == "kind: IngressRoute" { ingress_route = 1; next }
     ingress_route && $0 == "  name: lumora-love-tls" { lumora_tls = 1; next }
     lumora_tls && $1 == "certResolver:" { print $2; exit }
-  ' "$TEST_ROOT/deploy/k8s/lumora.yaml"
+  ' "$TEST_ROOT/deploy/k8s/lumora-ingress.yaml"
 )
 [[ "$tls_resolver" == "le-prod" ]] \
   && ok "lumora.love 使用线上存在的 le-prod 证书解析器" \
@@ -158,7 +158,7 @@ tls_entrypoints=$(
     lumora_tls && $0 == "  entryPoints:" { entrypoints = 1; next }
     entrypoints && /^    - / { print $2; next }
     entrypoints { exit }
-  ' "$TEST_ROOT/deploy/k8s/lumora.yaml" | paste -sd, -
+  ' "$TEST_ROOT/deploy/k8s/lumora-ingress.yaml" | paste -sd, -
 )
 [[ "$tls_entrypoints" == "websecure" ]] \
   && ok "TLS 路由只占用 websecure，保留 web 给 ACME HTTP challenge" \
