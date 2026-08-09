@@ -217,6 +217,21 @@ migrate_node=$(
   && ok "迁移 Job 钉在有镜像的 dev2" \
   || no "迁移 Job 调度节点是 ${migrate_node:-未指定}，预期为 dev2（否则 ImagePullBackOff）"
 
+# PostgreSQL 必须钉在节点上，而不是让调度器随便放。两个理由：
+#   1. 它用 hostPath，数据不跟着 pod 漂移，换节点就等于换了一个空库；
+#   2. 下面的内存预算把 backend 和 PostgreSQL 的 limits 加在一起，这个加法只有在
+#      两者同处一台机器时才成立。
+# 清单里是 __PG_NODE__ 占位符，apply 时才由 sed 替换，所以静态能查的是「有没有
+# 钉」而不是「钉在哪」。替换成 dev1 会把数据库 I/O 放回控制面节点 —— 那正是
+# 2026-08-04 把 kine 拖垮、两台节点一起 NotReady 的成因，务必替换成 dev2。
+pg_node=$(
+  awk '$1 == "kubernetes.io/hostname:" { print $2; exit }' \
+    "$TEST_ROOT/deploy/k8s/lumora-postgres.yaml"
+)
+[[ -n "$pg_node" ]] \
+  && ok "PostgreSQL 通过 nodeSelector 钉死在节点上（占位符 ${pg_node}）" \
+  || no "lumora-postgres.yaml 没有 nodeSelector —— hostPath 一旦漂移就是空库"
+
 # dev2 物理内存 1870Mi，上面跑 web/worker 两个 JVM 加集群内 PostgreSQL。limits
 # 合计一旦明显超过物理内存，三个容器同时冲顶就会惊动内核 OOM killer —— 它不看
 # limits 挑谁杀，很可能连 PostgreSQL 一起带走。2026-08-08/09 两次断站都是节点级
