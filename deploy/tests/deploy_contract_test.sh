@@ -140,12 +140,16 @@ before() {
 # ------------------------------------------------------------------------ 用例
 
 printf '\n--- 资源配置 ---\n'
+# IngressRoute lumora-love-tls 曾经在 lumora.yaml 里，e503260「移除重复 IngressRoute」
+# 把它挪到了入口层清单 lumora-ingress.yaml，但这两条断言当时没跟着改，于是它们从那次
+# 提交起就一直是红的 —— 断言找不到目标时报的是「未配置」，看起来像配置真的丢了，
+# 掩盖了「测试自己找错了文件」。改成读入口层清单。
 tls_resolver=$(
   awk '
     $0 == "kind: IngressRoute" { ingress_route = 1; next }
     ingress_route && $0 == "  name: lumora-love-tls" { lumora_tls = 1; next }
     lumora_tls && $1 == "certResolver:" { print $2; exit }
-  ' "$TEST_ROOT/deploy/k8s/lumora.yaml"
+  ' "$TEST_ROOT/deploy/k8s/lumora-ingress.yaml"
 )
 [[ "$tls_resolver" == "le-prod" ]] \
   && ok "lumora.love 使用线上存在的 le-prod 证书解析器" \
@@ -158,7 +162,7 @@ tls_entrypoints=$(
     lumora_tls && $0 == "  entryPoints:" { entrypoints = 1; next }
     entrypoints && /^    - / { print $2; next }
     entrypoints { exit }
-  ' "$TEST_ROOT/deploy/k8s/lumora.yaml" | paste -sd, -
+  ' "$TEST_ROOT/deploy/k8s/lumora-ingress.yaml" | paste -sd, -
 )
 [[ "$tls_entrypoints" == "websecure" ]] \
   && ok "TLS 路由只占用 websecure，保留 web 给 ACME HTTP challenge" \
