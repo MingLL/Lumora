@@ -66,8 +66,11 @@ services:
       retries: 6
       start_period: 40s
 
-  # Exactly one worker. Owns the scheduled jobs; internal sending stays off so it
-  # cannot be driven from outside.
+  # Exactly one worker. Owns the scheduled jobs, and since 2026-08-09 also serves
+  # the manual-resend endpoint: the separate ops container was merged in here to
+  # free ~180 MiB on dev2, which was hitting node-level OOM. Bound to loopback
+  # only; in production the Ingress routes /wechat/callback and nothing else, so
+  # /internal/ stays unreachable from the internet.
   worker:
     <<: *app-image
     environment:
@@ -75,7 +78,9 @@ services:
       SCHEDULING_ENABLED: "true"
       REPORT_RECOVERY_ENABLED: "true"
       RETENTION_ENABLED: "true"
-      INTERNAL_SEND_ENABLED: "false"
+      INTERNAL_SEND_ENABLED: "true"
+    ports:
+      - "127.0.0.1:${OPS_PORT:-8081}:8080"
     healthcheck:
       # Set by WorkerReadinessVerifier only after mode, database and scheduled
       # task checks all pass -- "started" is not the same as "working".
@@ -84,19 +89,6 @@ services:
       timeout: 2s
       retries: 12
       start_period: 40s
-
-  # Operator entry point for manual resends. Bound to loopback only; no public route.
-  ops:
-    <<: *app-image
-    profiles: ["ops"]
-    environment:
-      LUMORA_MODE: serve
-      SCHEDULING_ENABLED: "false"
-      REPORT_RECOVERY_ENABLED: "false"
-      RETENTION_ENABLED: "false"
-      INTERNAL_SEND_ENABLED: "true"
-    ports:
-      - "127.0.0.1:${OPS_PORT:-8081}:8080"
 
 volumes:
   postgres-data:
