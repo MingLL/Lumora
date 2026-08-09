@@ -21,10 +21,15 @@ import psycopg2
 import psycopg2.extras
 
 # 先父后子：report_delivery_attempt 有指向 daily_report 的外键。
+#
+# 这份清单必须和 Flyway 迁移建出来的业务表一一对应。jsapi_signature_error 是
+# V3 加的，而本脚本写在 V3 合并进来之前 —— 漏掉它不会报错，只会静默少搬 2 行，
+# 属于最难发现的那类。新增迁移时记得回来加。
 TABLES = [
     ("wechat_event", ["anomalous_timestamp", "ticket_present"]),
     ("daily_report", []),
     ("report_delivery_attempt", []),
+    ("jsapi_signature_error", []),
 ]
 GENERATED_COLUMNS = {"auto_report_id"}
 
