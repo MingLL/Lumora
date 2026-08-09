@@ -87,7 +87,7 @@
             #{compositeType,jdbcType=VARCHAR},
             #{compositeItemCount,jdbcType=INTEGER},
             #{compositeSha256,jdbcType=CHAR},
-            #{safeSummary},
+            #{safeSummary}::jsonb,
             #{normalizedMessageSha256}
         )
     </insert>
