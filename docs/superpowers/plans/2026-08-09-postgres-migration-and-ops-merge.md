@@ -41,6 +41,8 @@
 | `backend/src/main/resources/db/migration/V2__index_received_at_and_widen_raw_event_key.sql` | 重写 | PG 方言加索引 + 扩列 |
 | `backend/src/main/resources/application.yml` | 改 | 数据源 URL / driver / 会话时区 |
 | `backend/src/main/java/cn/minglli/lumora/config/LumoraProperties.java` | 改 | `mysql*` → `postgres*` |
+| `backend/src/main/java/cn/minglli/lumora/operations/StartupModeRunner.java` | 改 | **执行时才发现**：硬编码了 MySQL 驱动类、JDBC URL、`DATABASE()` 谓词和 `MIGRATION_MYSQL_*` 覆盖变量。它是 `LUMORA_MODE=migrate` / `schema-smoke` 的执行者，属于发布关键路径，不改则 Task 1 换掉驱动后这条路径直接是坏的 |
+| `backend/compose.yaml` | 改 | **执行时才发现**：本地开发栈里整个 MySQL 服务（见 Task 15） |
 | `backend/src/main/resources/mapper/ReportDeliveryMapper.xml` | 改 | `ON DUPLICATE KEY UPDATE` → `ON CONFLICT DO NOTHING` |
 | `backend/src/main/java/cn/minglli/lumora/operations/WorkerReadinessVerifier.java` | 改 | 允许 worker 同时开内部发送 |
 | `backend/src/test/java/cn/minglli/lumora/support/MySqlContainerTest.java` | 删 | 由下一行取代 |
@@ -404,16 +406,52 @@ git commit -m "feat(config): point datasource at PostgreSQL and rename MYSQL_* t
     </insert>
 ```
 
-- [ ] **Step 2: 确认全仓再无 MySQL 方言**
+- [ ] **Step 2: 给两个 JSONB 列的写入加显式 `::jsonb`**
+
+⚠️ **不加这个，每一条微信事件的写入都会在运行时失败。** V1 把 `safe_summary` 和
+`snapshot_json` 从 MySQL 的 `JSON` 换成了 PG 的 `JSONB`，而 mapper 用 `#{...}` 绑定
+Java `String`。pgjdbc 默认把 String 按 `varchar` 绑定，PG 又**没有 varchar → jsonb
+的隐式转换**。已在集群里实测确认：
+
+```
+varchar → jsonb   ERROR: column "v" is of type jsonb but expression is of type character varying
+#{x}::jsonb       INSERT 0 1   ✓
+```
+
+MySQL 的 JSON 类型不挑绑定类型，所以这个问题在切库前完全不存在，编译和契约测试也
+都拦不住 —— 只在运行时炸。
+
+写入点只有两处（读取路径不受影响，jsonb 取回来就是文本）：
+
+`backend/src/main/resources/mapper/WechatEventMapper.xml:90`
+
+```xml
+            #{safeSummary}::jsonb,
+```
+
+`backend/src/main/resources/mapper/DailyReportMapper.xml:162`
+
+```xml
+            #{snapshotJson}::jsonb
+```
+
+**为什么不用 `stringtype=unspecified`**：那样只需在 JDBC URL 加一个参数，但它把
+所有 String 参数的绑定行为全局改成 `unknown`，既削弱类型检查，也可能在别处引发
+「无法推断参数类型」。显式 cast 只影响这两列，且读代码的人能直接看出意图。
+
+- [ ] **Step 3: 确认全仓再无 MySQL 方言，且 JSONB 写入都带了 cast**
 
 Run: `grep -rniE "ON DUPLICATE KEY|INSERT IGNORE|REPLACE INTO|IFNULL|DATE_FORMAT|LAST_INSERT_ID" backend/src/main/resources/mapper/`
 Expected: 无输出
 
-- [ ] **Step 3: Commit**
+Run: `grep -rn "safeSummary\|snapshotJson" backend/src/main/resources/mapper/ | grep "#{"`
+Expected: 两行，且都以 `::jsonb` 结尾
+
+- [ ] **Step 4: Commit**
 
 ```bash
-git add backend/src/main/resources/mapper/ReportDeliveryMapper.xml
-git commit -m "feat(db): replace MySQL upsert with PostgreSQL ON CONFLICT DO NOTHING"
+git add backend/src/main/resources/mapper/
+git commit -m "feat(db): use ON CONFLICT and cast JSONB parameters explicitly"
 ```
 
 ---
@@ -849,10 +887,21 @@ POSTGRES_PASSWORD=
 
 把 `REQUIRED` 数组里的四个 `MYSQL_*` 换成 `POSTGRES_HOST` / `POSTGRES_DATABASE` / `POSTGRES_USERNAME` / `POSTGRES_PASSWORD`。
 
-- [ ] **Step 3: 用模板自检**
+- [ ] **Step 3: 校验改名完整**
 
-Run: `bash backend/deploy/check-env.sh backend/.env.example`
-Expected: `ok: backend/.env.example defines all 13 required variables`
+⚠️ 计划最初写的是「跑 `check-env.sh .env.example` 期望输出 ok」——**那是错的**，
+改名前也一样跑不过：该脚本要求变量有非空值，而 `.env.example` 是模板，所有值本来
+就是空的。改用真正能验证的检查：`REQUIRED` 里的每一项都要在模板里有对应的键。
+
+```bash
+cd backend
+while read -r name; do
+  grep -qE "^${name}=" .env.example || echo "缺: $name"
+done < <(sed -n '/^REQUIRED=(/,/^)/p' deploy/check-env.sh | grep -oE '^  [A-Z_]+' | tr -d ' ')
+grep -rn "MYSQL" .env.example deploy/check-env.sh || echo "无 MySQL 残留"
+```
+
+Expected: 没有「缺:」行，且输出 `无 MySQL 残留`
 
 - [ ] **Step 4: Commit**
 
@@ -1139,6 +1188,115 @@ git commit -m "docs: describe the PostgreSQL layout and the merged worker role"
 ```
 
 ---
+
+### Task 15: 本地开发用的 compose 栈（执行时补充）
+
+**Files:**
+- Modify: `backend/compose.yaml`
+
+计划最初漏了这个文件。它是「production-shaped local stack」，起一个 MySQL 供本地
+`docker compose up` 用。不改的话，切库后本地开发环境会连着一个应用已经不认识的库。
+
+- [ ] **Step 1: 把 mysql 服务换成 postgres**
+
+```yaml
+  postgres:
+    image: postgres:17-alpine
+    command: ["-c", "timezone=UTC"]
+    environment:
+      POSTGRES_DB: ${POSTGRES_DATABASE}
+      POSTGRES_USER: ${POSTGRES_USERNAME}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USERNAME} -d ${POSTGRES_DATABASE} -q"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+      start_period: 10s
+    restart: unless-stopped
+```
+
+注意与 MySQL 版的差异：PostgreSQL 官方镜像不接受 `MYSQL_RANDOM_ROOT_PASSWORD` 那类
+变量，`POSTGRES_PASSWORD` 就是超级用户密码，必须提供；`start_period` 可以从 30s 收到
+10s，PG 起得比 MySQL 快得多。
+
+- [ ] **Step 2: 改所有引用**
+
+- `x-app-image` 的 `depends_on:` 从 `mysql:` 改为 `postgres:`
+- 顶部注释 `# MySQL is never published to the host` 改成 PostgreSQL
+- 文件末尾 `volumes:` 段的 `mysql-data:` 改为 `postgres-data:`
+
+- [ ] **Step 3: 校验**
+
+Run: `cd backend && docker compose config >/dev/null && echo OK`
+Expected: `OK`（需要 Docker 在跑；Docker 不可用时改用 `grep -c mysql compose.yaml` 确认为 0）
+
+- [ ] **Step 4: Commit**
+
+```bash
+git add backend/compose.yaml
+git commit -m "chore(dev): swap the local compose stack from MySQL to PostgreSQL"
+```
+
+---
+
+## 执行期间发现的计划缺陷
+
+按顺序记下来，都是计划写完之后、实施过程中才暴露的：
+
+1. **JSONB 参数绑定**（Task 2 的 implementer 报出，已实测确认）。`safe_summary` /
+   `snapshot_json` 从 MySQL `JSON` 变成 PG `JSONB` 后，pgjdbc 把 Java String 按
+   `varchar` 绑定，而 PG 没有 varchar → jsonb 的隐式转换，**所有写入都会在运行时失败**。
+   编译、契约测试、DDL 验证全都拦不住。修法见 Task 5 Step 2。
+
+2. **`StartupModeRunner` 硬编码 MySQL**（Task 4 的 implementer 报出）。计划的文件清单
+   里没有它，但它是 migrate / schema-smoke 模式的执行者。Task 1 换掉驱动之后，
+   这条路径上没有 MySQL 驱动可用，发布第 5 步会直接失败。
+
+3. **`compose.yaml` 的本地 MySQL**（顺藤摸出）。见上面 Task 15。
+
+4. **DDL 从未被验证**。计划里 Task 2/3 写完就 commit，没有任何一步确认这些 SQL 在
+   PostgreSQL 上真能执行。已补：在 k3s 里起一次性 PG 跑 V1+V2，并做正向与负向验证
+   （生成列取值、触发器刷新 `updated_at`、显式插主键后 `setval` 能续上、重复 AUTO 行
+   被唯一约束拒绝、varchar 写 jsonb 被拒绝）。脚本应随 Task 14 落进 `deploy/tests/`。
+
+5. **`enableServiceLinks: false` 的理由会原样复现**。原注释说 `lumora-mysql` 这个
+   Service 注入的 `LUMORA_MYSQL_PORT=tcp://...` 会覆盖 `MYSQL_PORT`。真正的机制是
+   Spring 的宽松绑定 —— `LUMORA_MYSQL_PORT` 映射到配置属性 `lumora.mysql-port`。
+   改名后 Service 叫 `lumora-postgres`，注入 `LUMORA_POSTGRES_PORT`，正好映射到新属性
+   `lumora.postgres-port`，**同一个陷阱**。所以 `enableServiceLinks: false` 必须原样保留，
+   Task 9 与 Task 14 要把注释里的变量名一并更新，别让后人以为这条防护已经没用了。
+
+## 顺带发现的既有缺陷（不在本次范围内，建议单开）
+
+**同一份日报可能被投递两次。** Task 7 的 implementer 在排查合并后的竞态时发现，
+这是**切库和合并之前就存在**的问题 —— 保护措施一直在数据库层，不在进程边界，
+所以 `worker` / `ops` 拆成两个容器时风险完全相同。合并只是让它更容易被触发。
+
+根因：`uq_auto_report` 唯一约束建在生成列 `auto_report_id` 上，而该列对 MANUAL 行
+取 NULL；`uq_manual_request` 建在 `(report_id, request_id)` 上，只约束 MANUAL 行。
+**两个约束各管一边，没有任何东西把同一个 `report_id` 的 AUTO 行与 MANUAL 行关联起来**，
+于是同一份日报可以同时存在一条 SENT 的 AUTO 和一条 SENT 的 MANUAL。
+
+三条具体路径：
+
+1. `runAutoReport()` 从不检查是否已有成功的 MANUAL 投递。若运维在定时任务跑之前手动
+   补发过，定时任务仍会新建一条 PENDING 的 AUTO 行并成功投递 —— 这是确定性重复，
+   不是时序竞态。
+2. `sendManual(force=true)` 完全跳过 `findActiveByReportId` / `findSentByReportId` 两道
+   前置检查。
+3. `force=false` 时仍有窄窗口 TOCTOU：`ReportDeliveryService` 刻意不加 `@Transactional`
+   （类注释写明正确性依赖唯一约束与条件式 `claim` UPDATE），若手动请求的检查恰好落在
+   AUTO 行插入为 PENDING 之后、其 `claim()` 翻成 SENDING 之前，两条行会各自被 claim
+   并各自投递（`claim` 的 WHERE 匹配 `id` 而非 `report_id`）。
+
+可能的修法（未验证，供后续评估）：给 `report_delivery_attempt` 加一个跨 trigger_type
+的部分唯一索引，例如对「已成功」的行按 `report_id` 唯一
+（`CREATE UNIQUE INDEX ... ON report_delivery_attempt (report_id) WHERE status = 'SENT'`），
+让数据库直接拦住第二次成功投递。PostgreSQL 的部分索引正好适合表达这个约束 ——
+MySQL 没有部分索引，这也是为什么原来只能靠生成列绕。
 
 ## 风险与已知取舍
 
