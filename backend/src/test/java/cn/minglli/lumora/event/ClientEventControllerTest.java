@@ -3,6 +3,7 @@ package cn.minglli.lumora.event;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -47,5 +48,18 @@ class ClientEventControllerTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"visitId\":\"visit-1\",\"url\":\"https://lumora.love/\",\"properties\":{}}"))
                 .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void rejectsOversizedPropertiesWithoutTouchingTheDatabase() throws Exception {
+        String oversized = "x".repeat(4096);
+
+        mockMvc.perform(post("/client-events")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"visitId\":\"visit-1\",\"type\":\"PAGE_OPEN\",\"url\":\"https://lumora.love/\","
+                                + "\"properties\":{\"blob\":\"" + oversized + "\"}}"))
+                .andExpect(status().isBadRequest());
+
+        verifyNoInteractions(mapper);
     }
 }

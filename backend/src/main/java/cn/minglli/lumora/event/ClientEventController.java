@@ -19,6 +19,13 @@ import org.springframework.web.bind.annotation.RestController;
 public class ClientEventController {
 
     private static final Logger log = LoggerFactory.getLogger(ClientEventController.class);
+
+    // properties 是开放字段，没有上限的话任意大小的 JSON 都会被写进 JSONB 列。
+    // 真正挡住超大请求体的是入口层的 buffering 中间件（见
+    // deploy/k8s/lumora-ingress.yaml），这里是应用层兜底，也顺带划出「一个事件
+    // 的属性该有多大」的边界。当前最大的事件属性不到 100 字节。
+    private static final int MAX_PROPERTIES_JSON_LENGTH = 2048;
+
     private final ClientEventMapper mapper;
     private final ObjectMapper objectMapper;
 
@@ -29,10 +36,23 @@ public class ClientEventController {
 
     @PostMapping("/client-events")
     public ResponseEntity<Void> report(@Valid @RequestBody ClientEventReport report) {
+        String propertiesJson;
+        try {
+            propertiesJson = objectMapper.writeValueAsString(report.properties());
+        } catch (JsonProcessingException exception) {
+            // 序列化不了说明请求本身就不合法，和写库失败不是一回事，直接 400。
+            return ResponseEntity.badRequest().build();
+        }
+        if (propertiesJson.length() > MAX_PROPERTIES_JSON_LENGTH) {
+            log.warn("Rejected oversized client event type={} propertiesLength={}",
+                    report.type(), propertiesJson.length());
+            return ResponseEntity.badRequest().build();
+        }
+
         try {
             mapper.insert(new ClientEventRecord(null, report.visitId(), report.type(), report.url(),
-                    objectMapper.writeValueAsString(report.properties()), null, null));
-        } catch (RuntimeException | JsonProcessingException exception) {
+                    propertiesJson, null, null));
+        } catch (RuntimeException exception) {
             // 客户端观测事件不能影响页面可用性。
             log.warn("Failed to persist client event type={} errorClass={}",
                     report.type(), exception.getClass().getSimpleName());

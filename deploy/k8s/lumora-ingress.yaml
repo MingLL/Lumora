@@ -50,6 +50,25 @@ spec:
 apiVersion: traefik.io/v1alpha1
 kind: Middleware
 metadata:
+  name: lumora-client-event-buffer
+  namespace: lumora
+spec:
+  # /client-events 是匿名开放接口，properties 字段可以是任意 JSON。没有这一层
+  # 的话请求体在链路上任何一环都不受限：Traefik 默认不限，nginx 不经手这条路径，
+  # Spring 的 max-http-form-post-size 只管表单不管 JSON body ——
+  # 于是超大 body 会先被 Jackson 展开成 Java Map 再落库。这里按 4 KB 截断，
+  # 超过直接 413，请求根本到不了后端。
+  # memRequestBodyBytes 设成同一个值，避免 Traefik 把请求体落到磁盘暂存。
+  #
+  # ⚠️ 只挂在 /client-events 上，不要挂到 /wechat/callback ——
+  # 微信回调的报文大小不由我们控制。
+  buffering:
+    maxRequestBodyBytes: 4096
+    memRequestBodyBytes: 4096
+---
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
   name: www-to-apex
   namespace: lumora
 spec:
@@ -68,9 +87,22 @@ spec:
   entryPoints:
     - websecure
   routes:
+    # 埋点单独一条路由，只为了能挂 buffering 限制请求体大小 ——
+    # 和回调合成一条的话，4 KB 上限会连微信回调一起限住。
+    - kind: Rule
+      match: Host(`lumora.love`) && Path(`/client-events`)
+      priority: 300
+      middlewares:
+        - name: lumora-security-headers
+          namespace: lumora
+        - name: lumora-client-event-buffer
+          namespace: lumora
+      services:
+        - name: lumora-backend-web
+          port: 8080
     # 回调路径更长，用更高的 priority 保证先于兜底规则命中。
     - kind: Rule
-      match: Host(`lumora.love`) && (PathPrefix(`/wechat/callback`) || Path(`/client-events`))
+      match: Host(`lumora.love`) && PathPrefix(`/wechat/callback`)
       priority: 200
       middlewares:
         - name: lumora-security-headers
