@@ -21,6 +21,9 @@ WeChat Official Account daily reporting service. Receives WeChat callback events
 - Daily report generation (HTML + plain text) with event breakdowns, unique user stats, QR scene analysis, menu interaction analytics
 - Scheduled delivery at 7:00 AM (Shanghai timezone) via QQ SMTP with stale-delivery recovery
 - Internal REST API (`/internal/reports/{date}/send`) for on-demand delivery and re-delivery
+- WeChat JS-SDK signing (`GET /wechat/callback/jsapi-signature`) for same-origin
+  page URLs only, backed by an in-process access-token/jsapi-ticket cache; client-side
+  config failures are reported to `POST /wechat/callback/jsapi-signature/error`
 - Anonymous client-environment event ingestion (`POST /client-events`); see
   [the event ingestion boundary](../docs/client-event-ingestion.md) before adding event types
 - Dockerized with multi-stage build
@@ -52,10 +55,13 @@ plus a local HTTPS tunnel - no production environment needed:
    ```bash
    docker build -t lumora:local .
    ```
-2. `cp .env.dev.example .env`, then fill in `WECHAT_APP_ID` from the test
-   account page. Leave `WECHAT_ORIGINAL_ID` empty for now - step 4 captures it.
-   The test account also shows an appSecret; this service never calls WeChat's
-   outbound APIs, so there is nowhere to put it and nothing needs it.
+2. `cp .env.dev.example .env`, then fill in `WECHAT_APP_ID` and
+   `WECHAT_APP_SECRET` from the test account page. Leave `WECHAT_ORIGINAL_ID`
+   empty for now - step 4 captures it. The AppSecret is required even for a
+   callback-only session: `LumoraProperties` validates it unconditionally, so a
+   blank value fails startup before the first callback ever arrives.
+   `WechatJsapiSignatureService` is what uses it - it calls WeChat's outbound
+   `cgi-bin/token` and `cgi-bin/ticket` endpoints to sign JS-SDK config.
 3. Start the helper that captures the original ID, then expose it publicly.
    Both scripts live at the repo root, not under `backend/`:
    ```bash
@@ -99,7 +105,11 @@ tunnel gets you a stable address if that churn becomes annoying.
 Key environment variables:
 
 Everything below without a default is required — the application fails fast at
-startup naming the missing variable. See `.env.example` for the full list.
+startup naming the missing variable. `.env.example` is the deployment template and
+carries everything the container reads from an env file. `LUMORA_MODE` and the
+`MIGRATION_POSTGRES_*` pair are deliberately absent from it: the manifests and
+`docker run` set the mode per invocation, and the migration user falls back to
+`POSTGRES_USERNAME` / `POSTGRES_PASSWORD` when unset.
 
 | Variable | Default | Description |
 |---|---|---|
@@ -107,6 +117,7 @@ startup naming the missing variable. See `.env.example` for the full list.
 | `WECHAT_ORIGINAL_ID` | — | Official Account original ID (`gh_…`), checked against `ToUserName` |
 | `WECHAT_TOKEN` | — | WeChat callback token |
 | `WECHAT_AES_KEY` | — | WeChat AES encoding key (safe mode) |
+| `WECHAT_APP_SECRET` | — | WeChat AppSecret. Required at startup even when nothing calls out; used only by `WechatJsapiSignatureService` for the `cgi-bin/token` / `cgi-bin/ticket` requests behind JS-SDK signing |
 | `POSTGRES_HOST` | — | PostgreSQL host |
 | `POSTGRES_PORT` | `5432` | PostgreSQL port |
 | `POSTGRES_DATABASE` | — | Database name |

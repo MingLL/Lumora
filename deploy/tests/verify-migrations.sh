@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# 在 k3s 里起一个一次性 PostgreSQL，把 V1/V2 迁移真跑一遍，验证 DDL 成立。
+# 在 k3s 里起一个一次性 PostgreSQL，把全部迁移按版本号真跑一遍，验证 DDL 成立。
 # 本机 Docker 停着，所以借集群验证。跑完自动删干净，不碰 lumora 命名空间。
 #
 #   bash verify-ddl.sh /path/to/Lumora-postgres

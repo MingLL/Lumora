@@ -7,7 +7,8 @@
 frontend/     Astro 静态站（组件、字体子集脚本）
 backend/      Spring Boot 服务（微信回调、日报、PostgreSQL）
 deploy/       前后端的 k3s 部署清单、发布脚本与契约测试
-scripts/      运维脚本（nginx 访问日报）与内容仓库的挂载脚本
+scripts/      运维与分析脚本：访问日报、访问日志安全分析、微信本地联调助手、
+              内容仓库挂载（逐个说明见 scripts/README.md）
 docs/         设计与方案文档
 content/      文章正文与配图，来自私有仓库，不在本仓库里（见下）
 ```
@@ -34,8 +35,14 @@ content/      文章正文与配图，来自私有仓库，不在本仓库里（
 | 部署 | 本地构建 → rsync 到 dev1/dev2 → k3s 里的 nginx | 本地构建镜像 → ctr import → k3s |
 | 说明 | [frontend/README.md](frontend/README.md) | [backend/README.md](backend/README.md) |
 
-两者目前**没有代码耦合**：站点是纯静态的，不调用后端接口。后端服务于公众号侧的
-事件收集与日报，是独立进程。放在一个仓库里是为了统一版本和运维视角。
+两者**只在文章页耦合**，且是单向的：站点仍是纯静态产物，但 `ArticleLayout.astro`
+里的一段脚本会调后端三个公开接口 —— `POST /client-events` 上报匿名环境事件
+（见 [docs/client-event-ingestion.md](docs/client-event-ingestion.md)），微信环境下再加
+`GET /wechat/callback/jsapi-signature` 取 JS-SDK 签名和 `POST .../jsapi-signature/error`
+上报签名失败。三个调用都不影响渲染：两个上报是 fire-and-forget，签名请求失败只会走 `catch`
+上报一条错误。后端挂了文章页照常打开，只是少几条埋点、JS-SDK 不可用。
+其余页面不碰后端，后端的公众号事件收集与日报也不依赖前端，是独立进程。
+放在一个仓库里是为了统一版本和运维视角。
 
 ## 快速开始
 
@@ -65,8 +72,9 @@ mvn -DskipTests package
 ```
 
 都在仓库根目录执行，脚本自己会进各自的子目录。两者共用同一套 k3s 和 `lumora`
-命名空间，但发布互不影响 —— Traefik 按路径长度定优先级，`/wechat/callback/`
-先于前端的 `/` 命中。
+命名空间，但发布互不影响 —— 入口路由在 `deploy/k8s/lumora-ingress.yaml` 里显式写了
+priority：后端的 `/client-events` 和 `/wechat/callback/jsapi-signature`（300，单独一条
+是为了挂请求体大小限制）> 其余 `/wechat/callback`（200）> 前端兜底的 `/`（100）。
 
 架构、接域名 / HTTPS、后端发布顺序与回滚、每日访问日报的安装与排查，
 都在 [deploy/README.md](deploy/README.md)。

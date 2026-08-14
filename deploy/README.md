@@ -8,7 +8,7 @@
 | 发布命令 | `./deploy/deploy.sh` | `./deploy/deploy-backend.sh` |
 | 清单 | `deploy/k8s/lumora.yaml` | `deploy/k8s/lumora-backend*.yaml` |
 | 共用清单 | `deploy/k8s/lumora-ingress.yaml`（入口层，两边都会 apply） ||
-| 公网路径 | `/`（兜底） | `/wechat/callback/`（更长，优先命中） |
+| 公网路径 | `/`（兜底，priority 100） | `/wechat/callback/`（200）、`/client-events` 与 `/wechat/callback/jsapi-signature`（300，单独一条路由以挂请求体上限） |
 | 详见 | 下文 | [后端发布](#后端发布) |
 
 下文先讲**前端静态站**（`frontend/`）。
@@ -327,7 +327,7 @@ ssh dev1 'k3s kubectl get pod -A -o json | jq -r ".items[]|select(.status.contai
 | 角色 | 副本 | 后台任务 | 内部发送 | 公网 |
 |---|---|---|---|---|
 | `migrate` (Job) | 一次性 | — | — | 无 |
-| `web` | 1 | 全关 | 关 | `/wechat/callback/` |
+| `web` | 1 | 全关 | 关 | `/wechat/callback/`、`/client-events` |
 | `worker` | 1 | 全开 | 开 | 无 |
 
 `ops` 已于 2026-08-09 合并进 `worker`（见下方[变更记录](#变更记录)）：手动补发
@@ -414,7 +414,7 @@ sed 's/__PG_NODE__/dev2/' deploy/k8s/lumora-postgres.yaml \
 4. 从服务器 `.env` 刷新 `Secret/lumora-env`
 5. 跑迁移 Job，**等它完成**
 6. `schema-smoke` 确认候选镜像能用迁移后的库
-7. apply 清单，等三个 Deployment rollout
+7. apply 清单，等两个 Deployment（`web`、`worker`）rollout
 8. 验证 web 存活，并确认公网访问不到 `/internal/` 和 `/actuator/health/readiness`
 
 回滚：
@@ -455,8 +455,9 @@ bash deploy/tests/verify-migrations.sh /path/to/Lumora-postgres
 ```
 
 在 k3s 里起一个一次性 PostgreSQL（借 dev2 算力，default 命名空间，不碰
-`lumora`，跑完自动删干净），把 `V1__create_event_and_report_tables.sql` 和
-`V2__index_received_at_and_widen_raw_event_key.sql` 真实执行一遍，断言：表和
+`lumora`，跑完自动删干净），把 `backend/src/main/resources/db/migration/` 下的**全部**
+迁移按版本号（`sort -V`）依次真实执行一遍 —— 当前是 V1～V4，文件名不写死，新增迁移
+自动纳入，不用回来改这里。之后断言：表和
 索引都按预期建出来、生成列 `auto_report_id` 按 `trigger_type` 正确取值、
 `updated_at` 触发器在 `UPDATE` 时真的会刷新、显式插入主键后 `setval` 能让
 IDENTITY 序列正常接续（数据迁移脚本依赖这个行为）、重复的 AUTO 行会被

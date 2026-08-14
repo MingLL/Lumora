@@ -1,5 +1,13 @@
 # WeChat Server API Foundation Implementation Plan
 
+> **状态（2026-08-14 复核）：未实施。** `cn.minglli.lumora.wechat.api` 包不存在，
+> `WECHAT_API_ENABLED` / `WECHAT_API_BASE_URL` 等开关也没有进 `LumoraProperties`。
+> 后来落地的唯一一处出站调用是 JS-SDK 签名 —— `WechatJsapiSignatureService` 用
+> `RestTemplate` 直接请求 `cgi-bin/token` 和 `cgi-bin/ticket`，进程内缓存 token/ticket，
+> 既没走本计划设计的 `WechatApiTransport`，也没有条件开关：`WECHAT_APP_SECRET` 是
+> 无条件 `@NotBlank` 的。真要推进本计划时，第一步是把那处实现收编进 `wechat.api`，
+> 而不是照着下面的文件清单再建一套并行的出站链路。
+>
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Add the authenticated outbound WeChat API client, safe access-token lifecycle, shared error handling, five basic APIs, and the two read-only OpenAPI diagnostics on which all later API modules depend.

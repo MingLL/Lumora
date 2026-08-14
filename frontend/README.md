@@ -7,7 +7,7 @@
 
 ## 技术栈
 
-- Astro + TypeScript
+- Astro 7 + TypeScript
 - Markdown / MDX 内容管理
 - Astro Content Collections
 - Tailwind CSS
@@ -21,14 +21,18 @@ src/
   content/
     blog/           # Markdown 文章 —— 符号链接，指向私有内容仓库
   content.config.ts # 内容集合 schema
-  data/             # 站点配置、时间线、城市数据
+  data/             # 站点配置、时间线、城市数据、字体预加载清单
   layouts/          # 站点布局和文章布局
+  lib/              # 构建期工具（读图片真实宽高、生成模糊占位图）
   pages/            # 页面路由
   styles/           # 全局样式
 public/
   images/           # 文章配图、封面、二维码 —— 符号链接，指向私有内容仓库
   fonts/            # 子集化后的字体产物
   favicon.svg
+scripts/
+  build-fonts.py            # 字体子集化（npm run fonts）
+  rehype-image-dimensions.mjs  # 构建期给正文图片补宽高与占位图
 ```
 
 **文章正文和图片不在这个仓库里**，它们在私有仓库 `MingLL/lumora-content`。
@@ -147,7 +151,13 @@ cd .. && ./deploy/deploy.sh    # 构建 + 同步到两台服务器 + 应用 k8s 
 
 架构说明、接域名和 HTTPS 的步骤、排查命令见 [../deploy/README.md](../deploy/README.md)。
 
-以下是托管平台的备选方案。
+> 文章页有一段脚本会调同源的后端接口：`POST /client-events` 上报匿名环境事件，
+> 微信环境下还会取 JS-SDK 签名（`/wechat/callback/jsapi-signature`）。这些路径由
+> 入口层转发给后端服务，**只有自有服务器这套部署才有**。
+
+以下是托管平台的备选方案 —— 站点本身能正常构建和访问，但上述接口在这些平台上
+不存在，埋点和微信 JS-SDK 会静默失效（页面渲染不受影响，见 `ArticleLayout.astro`
+里的 catch 处理）。
 
 ## 部署到 Vercel
 
@@ -174,3 +184,5 @@ cd .. && ./deploy/deploy.sh    # 构建 + 同步到两台服务器 + 应用 k8s 
 - `/cities` 城市地图
 - `/about` 关于页
 - `/posts/[slug]` 文章详情页
+- `/404` 404 页
+- 非页面路由：`/rss.xml`、`/robots.txt`、`/sitemap-index.xml`（由 `@astrojs/sitemap` 生成）

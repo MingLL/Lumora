@@ -23,7 +23,7 @@ set -euo pipefail
 # 到 supervisor 的隧道断开跟着 NotReady。dev1 上根本不跑后端 Pod，这份 I/O
 # 是纯浪费。三周的 journal 里 NotReady 只出现过两次，两次都在 import 期间。
 IMAGE_HOSTS=(dev2)
-BACKEND_NODE=dev2                          # 三个 Deployment、迁移 Job、schema-smoke 都钉在这里
+BACKEND_NODE=dev2                          # 两个 Deployment（web/worker）、迁移 Job、schema-smoke 都钉在这里
 CONTROL_HOST=dev1                          # 跑 kubectl 的节点（k3s control-plane），不导镜像
 NAMESPACE=lumora
 SITE_URL=https://lumora.love                # Ingress 按 host 匹配，探测必须带对域名才有意义
