@@ -170,6 +170,63 @@ tls_entrypoints=$(
   && ok "TLS 路由只占用 websecure，保留 web 给 ACME HTTP challenge" \
   || no "TLS 路由 entryPoints 是 ${tls_entrypoints:-未配置}，预期只包含 websecure"
 
+# 匿名开放接口（/client-events 和 jsapi-signature）靠入口层的 buffering 中间件挡住超大
+# 请求体，微信回调则必须绕开它 —— 报文大小不由我们控制。这三条断言锁住的正是
+# docs/client-event-ingestion.md 里「入口层 4 KB」那一层：改错了清单，文档就成了谎话。
+small_body=$(
+  awk '
+    /^---$/ { middleware = 0; target = 0; next }
+    $0 == "kind: Middleware" { middleware = 1; next }
+    middleware && $0 == "  name: lumora-small-body" { target = 1; next }
+    target && $1 == "maxRequestBodyBytes:" { max = $2 }
+    target && $1 == "memRequestBodyBytes:" { mem = $2 }
+    END { print max "/" mem }
+  ' "$TEST_ROOT/deploy/k8s/lumora-ingress.yaml"
+)
+[[ "$small_body" == "4096/4096" ]] \
+  && ok "lumora-small-body 把匿名接口的请求体截在 4 KB（内存缓冲同值，不落盘）" \
+  || no "lumora-small-body 的 max/mem 是 ${small_body:-未配置}，预期 4096/4096"
+
+# 把 IngressRoute 的每条 route 压成一行，方便逐条判断。match 用的是 >- 折叠标量，
+# 会跨行，所以必须整块拼起来看，不能逐行 grep。
+route_blocks=$(
+  awk '
+    $0 == "    - kind: Rule" { if (started) print block; block = ""; started = 1; next }
+    started { block = block " " $0 }
+    END { if (started) print block }
+  ' "$TEST_ROOT/deploy/k8s/lumora-ingress.yaml"
+)
+anon_route=$(printf '%s\n' "$route_blocks" | grep -F '/client-events' || true)
+callback_route=$(printf '%s\n' "$route_blocks" | grep -F 'PathPrefix(`/wechat/callback`)' \
+  | grep -vF '/client-events' || true)
+
+if [[ -z "$anon_route" ]]; then
+  no "入口层没有 /client-events 的路由 —— 埋点接口在公网上不可达"
+elif printf '%s' "$anon_route" | grep -qF 'jsapi-signature' \
+  && printf '%s' "$anon_route" | grep -qF 'lumora-small-body'; then
+  ok "/client-events 与 jsapi-signature 同路由，且挂上了 lumora-small-body"
+else
+  no "/client-events 的路由没有同时覆盖 jsapi-signature 或没挂 lumora-small-body"
+fi
+
+if [[ -z "$callback_route" ]]; then
+  no "入口层没有 /wechat/callback 的兜底路由"
+elif printf '%s' "$callback_route" | grep -qF 'lumora-small-body'; then
+  no "/wechat/callback/{appId} 挂了 lumora-small-body —— 微信报文大小不由我们控制，会被 413"
+else
+  ok "/wechat/callback/{appId} 绕开了 4 KB 上限"
+fi
+
+anon_priority=$(printf '%s' "$anon_route" | sed -n 's/.*priority: \([0-9]*\).*/\1/p')
+callback_priority=$(printf '%s' "$callback_route" | sed -n 's/.*priority: \([0-9]*\).*/\1/p')
+if [[ -n "$anon_priority" && -n "$callback_priority" ]] \
+  && (( anon_priority > callback_priority )); then
+  # 花括号不能省：变量名后面直接跟中文标点，set -u 下会当成变量名的一部分（见上面 before() 的注释）。
+  ok "匿名接口路由的 priority（${anon_priority}）高于回调兜底（${callback_priority}），先命中"
+else
+  no "priority 不对：匿名接口 ${anon_priority:-未配置}，回调兜底 ${callback_priority:-未配置}，前者必须更大"
+fi
+
 frontend_node=$(
   awk '
     $0 == "kind: DaemonSet" { daemonset = 1; next }
