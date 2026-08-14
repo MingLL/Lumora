@@ -12,6 +12,21 @@
 一次页面打开生成的事件共享同一个 `visitId`，以便关联 `PAGE_OPEN` 和后续的
 `NETWORK_TYPE`。该标识只在当前页面内存中存在，不作为登录身份或跨页面追踪标识。
 
+`visitId` 必须是标准 UUID，服务端按形状校验（不校验 version/variant —— 目的是
+限定形状，不是认证来源）。前端三层兜底都产出 UUID：`crypto.randomUUID`
+（要求安全上下文，Safari 15.4+）→ `crypto.getRandomValues` 手工拼 v4（老 webview
+上更靠得住）→ `Math.random`。最后一层随机性不足，但 `visitId` 只用来把同一次访问的
+两条事件串起来，撞了也只是少关联一条。
+
+> **发布顺序：前端先于后端。** 后端收紧到只认 UUID，而收紧前的前端在没有
+> `crypto.randomUUID` 的 webview 上会发 `${Date.now()}-${Math.random()}`。
+> 先发后端的话，这段时间里那些客户端的事件会被 400 掉。HTML 是 `no-cache`
+> （见 `deploy/k8s/lumora.yaml` 的 nginx 配置），前端发完下一次页面加载就拿到新
+> 脚本，所以只要顺序对，窗口就只剩「后端发布那一刻已经打开着的页面」。
+>
+> 老数据不受影响：`client_event.visit_id` 仍是 `VARCHAR(64)`，历史行按原样保留，
+> 没有按格式查询它的地方。不做数据回填 —— 重写标识会毁掉它唯一的用途。
+
 事件存入 PostgreSQL 的 `client_event` 表：`visit_id`、`type`、`url`、
 `properties JSONB`、`received_at`。`properties` 预留给以后新增事件使用，新增
 事件不需要修改表结构。
@@ -29,7 +44,7 @@
 - **应用层限流**：按来源 IP 每分钟 60 次，用的是**独立于微信签名接口的计数桶**。
   一次页面打开会发 `PAGE_OPEN` + `NETWORK_TYPE` 两条事件，两者共桶的话埋点流量
   会把签名接口挤到 429 —— 功能不能被观测拖垮。
-- **字段校验**：`visitId` 和 `type` 各 64 字符、`url` 2048 字符且必须是
+- **字段校验**：`visitId` 必须是标准 UUID、`type` 至多 64 字符、`url` 2048 字符且必须是
   `lumora.love` 下的页面（`SiteUrlValidator`，按 scheme + host + port 比对，不做
   前缀匹配），`properties` 序列化后不超过 2048 字符。
 - **事件契约校验**：`ClientEventContract` 维护允许的 `type` 及每类事件的属性
@@ -63,11 +78,9 @@
 
 1. ~~**事件契约校验**~~：已完成，见 `ClientEventContract`。新增事件时在契约里加
    一行，并同时提交对应的测试。
-2. **输入与网关限制**：请求体 4 KB、URL 域名、属性 schema 都已经落地。仍待补的是
-   `visitId` 仅接收 UUID —— 现在前端在没有 `crypto.randomUUID` 的老 webview 上会
-   退化成 `${Date.now()}-${Math.random()}`，要收紧得先把前端的兜底改成生成合规
-   UUID，否则会把老客户端的数据全部拒掉。另可在 Traefik 侧再加一层每 IP 平均
-   5 次/分钟、突发 10 次的限流，在应用层之前挡掉刷写。
+2. ~~**输入与网关限制**~~：已完成 —— 请求体 4 KB、URL 域名、属性 schema、
+   `visitId` 仅接收 UUID。仍可选做的是在 Traefik 侧再加一层每 IP 平均 5 次/分钟、
+   突发 10 次的限流，在应用层之前挡掉刷写。
 3. **高可信场景另行设计**：若事件将用于告警、风控或计费，必须引入短时、一次性
    的服务端签发令牌，并由 CDN/WAF 提供防刷能力。匿名埋点接口本身不能承担该信任级别。
 

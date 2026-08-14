@@ -9,6 +9,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -27,6 +28,13 @@ public class ClientEventController {
     // deploy/k8s/lumora-ingress.yaml），这里是应用层兜底，也顺带划出「一个事件
     // 的属性该有多大」的边界。当前最大的事件属性不到 100 字节。
     private static final int MAX_PROPERTIES_JSON_LENGTH = 2048;
+
+    // 只收标准 UUID：visitId 由客户端生成，不限形状的话它就成了一个 64 字符的
+    // 任意字符串写入口，攻击者能往里塞带含义的标识去污染后续的关联分析。
+    // 不额外校验 version/variant —— 目的是限定形状，不是认证来源，卡死版本只会
+    // 在将来换生成方式时变成绊脚石。
+    private static final String UUID_PATTERN =
+            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$";
 
     private final ClientEventMapper mapper;
     private final ObjectMapper objectMapper;
@@ -81,7 +89,8 @@ public class ClientEventController {
     }
 
     public record ClientEventReport(
-            @NotBlank @Size(max = 64) String visitId,
+            // @Pattern 不管 null，所以 @NotBlank 还得留着。
+            @NotBlank @Pattern(regexp = UUID_PATTERN) String visitId,
             @NotBlank @Size(max = 64) String type,
             @NotBlank @Size(max = SiteUrlValidator.MAX_URL_LENGTH) String url,
             @NotNull Map<String, Object> properties) {
