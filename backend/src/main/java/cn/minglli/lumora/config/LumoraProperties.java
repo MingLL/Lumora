@@ -10,6 +10,7 @@ import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Pattern;
 
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.validation.annotation.Validated;
@@ -66,6 +67,13 @@ public class LumoraProperties {
 
     @NotBlank(message = "REPORT_ADMIN_KEY must not be blank")
     private String reportAdminKey;
+
+    // 站点自己的来源，用于判断客户端传来的 URL 是不是本站页面（见 SiteUrlValidator）。
+    // 只写 scheme + host，不带路径和尾斜杠。做成配置项而不是常量，是为了本地起后端
+    // 联调时能指到 http://localhost:4321。
+    @NotBlank(message = "SITE_ORIGIN must not be blank")
+    @Pattern(regexp = "^https?://[^/?#]+$", message = "SITE_ORIGIN must be scheme://host without a trailing path")
+    private String siteOrigin = "https://lumora.love";
 
     @NotNull
     private ZoneId zone = ZoneId.of("Asia/Shanghai");
@@ -199,6 +207,14 @@ public class LumoraProperties {
 
     public void setReportAdminKey(String reportAdminKey) {
         this.reportAdminKey = reportAdminKey;
+    }
+
+    public String getSiteOrigin() {
+        return siteOrigin;
+    }
+
+    public void setSiteOrigin(String siteOrigin) {
+        this.siteOrigin = siteOrigin;
     }
 
     public ZoneId getZone() {

@@ -117,6 +117,7 @@ startup naming the missing variable. See `.env.example` for the full list.
 | `MAIL_FROM_NAME` | `Lumora` | Display name on outgoing mail |
 | `REPORT_RECIPIENTS` | — | Comma-separated report recipients |
 | `REPORT_ADMIN_KEY` | — | Key for `X-Lumora-Admin-Key` on `/internal/**`; those routes also require `X-Request-Id` (see below) |
+| `SITE_ORIGIN` | `https://lumora.love` | Scheme + host the site is served from. Client-supplied URLs on the public endpoints must match it; point it at your dev origin when running the backend locally |
 | `LUMORA_ZONE` | `Asia/Shanghai` | Zone for report dates, schedules and mail timestamps |
 | `SCHEDULING_ENABLED` | `true` | Registers the 07:00 daily report job |
 | `REPORT_RECOVERY_ENABLED` | `true` | Registers the stale-delivery recovery job |

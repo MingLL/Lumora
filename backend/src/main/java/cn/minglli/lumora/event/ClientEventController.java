@@ -2,6 +2,8 @@ package cn.minglli.lumora.event;
 
 import java.util.Map;
 
+import cn.minglli.lumora.operations.LogSanitizer;
+import cn.minglli.lumora.operations.SiteUrlValidator;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.validation.Valid;
@@ -28,14 +30,30 @@ public class ClientEventController {
 
     private final ClientEventMapper mapper;
     private final ObjectMapper objectMapper;
+    private final SiteUrlValidator siteUrlValidator;
 
-    public ClientEventController(ClientEventMapper mapper, ObjectMapper objectMapper) {
+    public ClientEventController(ClientEventMapper mapper, ObjectMapper objectMapper,
+            SiteUrlValidator siteUrlValidator) {
         this.mapper = mapper;
         this.objectMapper = objectMapper;
+        this.siteUrlValidator = siteUrlValidator;
     }
 
     @PostMapping("/client-events")
     public ResponseEntity<Void> report(@Valid @RequestBody ClientEventReport report) {
+        // 站外 URL 的事件只会污染访问分析，不收。
+        if (!siteUrlValidator.isSiteUrl(report.url())) {
+            log.warn("Rejected client event with off-site url={}", LogSanitizer.forLog(report.url()));
+            return ResponseEntity.badRequest().build();
+        }
+
+        String violation = ClientEventContract.violation(report.type(), report.properties());
+        if (violation != null) {
+            log.warn("Rejected client event violating contract type={} reason={}",
+                    LogSanitizer.forLog(report.type()), violation);
+            return ResponseEntity.badRequest().build();
+        }
+
         String propertiesJson;
         try {
             propertiesJson = objectMapper.writeValueAsString(report.properties());
@@ -43,9 +61,11 @@ public class ClientEventController {
             // 序列化不了说明请求本身就不合法，和写库失败不是一回事，直接 400。
             return ResponseEntity.badRequest().build();
         }
+        // 走到这里 properties 已经过了契约校验，长度不该超标。留着这道兜底，是为了
+        // 将来往契约里加不定长属性时，不至于悄悄把超大值写进库。
         if (propertiesJson.length() > MAX_PROPERTIES_JSON_LENGTH) {
             log.warn("Rejected oversized client event type={} propertiesLength={}",
-                    report.type(), propertiesJson.length());
+                    LogSanitizer.forLog(report.type()), propertiesJson.length());
             return ResponseEntity.badRequest().build();
         }
 
@@ -55,7 +75,7 @@ public class ClientEventController {
         } catch (RuntimeException exception) {
             // 客户端观测事件不能影响页面可用性。
             log.warn("Failed to persist client event type={} errorClass={}",
-                    report.type(), exception.getClass().getSimpleName());
+                    LogSanitizer.forLog(report.type()), exception.getClass().getSimpleName());
         }
         return ResponseEntity.noContent().build();
     }
@@ -63,7 +83,7 @@ public class ClientEventController {
     public record ClientEventReport(
             @NotBlank @Size(max = 64) String visitId,
             @NotBlank @Size(max = 64) String type,
-            @NotBlank @Size(max = 2048) String url,
+            @NotBlank @Size(max = SiteUrlValidator.MAX_URL_LENGTH) String url,
             @NotNull Map<String, Object> properties) {
     }
 }

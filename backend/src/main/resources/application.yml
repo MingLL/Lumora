@@ -52,6 +52,7 @@ lumora:
   mail-auth-code: ${MAIL_AUTH_CODE:}
   mail-from-name: ${MAIL_FROM_NAME:Lumora}
   report-recipients: ${REPORT_RECIPIENTS:}
+  site-origin: ${SITE_ORIGIN:https://lumora.love}
   report-admin-key: ${REPORT_ADMIN_KEY:}
   zone: ${LUMORA_ZONE:Asia/Shanghai}
   scheduling-enabled: ${SCHEDULING_ENABLED:true}
