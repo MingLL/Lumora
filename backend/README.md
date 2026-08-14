@@ -21,6 +21,8 @@ WeChat Official Account daily reporting service. Receives WeChat callback events
 - Daily report generation (HTML + plain text) with event breakdowns, unique user stats, QR scene analysis, menu interaction analytics
 - Scheduled delivery at 7:00 AM (Shanghai timezone) via QQ SMTP with stale-delivery recovery
 - Internal REST API (`/internal/reports/{date}/send`) for on-demand delivery and re-delivery
+- Anonymous client-environment event ingestion (`POST /client-events`); see
+  [the event ingestion boundary](../docs/client-event-ingestion.md) before adding event types
 - Dockerized with multi-stage build
 
 ## Quick Start

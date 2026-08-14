@@ -12,6 +12,9 @@ __pycache__/
 # Maven / 构建产物
 target/
 
+# 本地生成的访问与安全分析报表
+reports/
+
 # Local reference exports
 \# 远方有温度网站设计方案__## 一、设计理解__这不是一个_秀_/
 
