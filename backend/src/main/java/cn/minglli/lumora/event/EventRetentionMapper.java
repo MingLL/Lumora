@@ -16,5 +16,7 @@ public interface EventRetentionMapper {
 
     int deleteEventsOlderThan(@Param("cutoff") Instant cutoff);
 
+    int deleteClientEventsOlderThan(@Param("cutoff") Instant cutoff);
+
     int deleteJsapiSignatureErrorsOlderThan(@Param("cutoff") Instant cutoff);
 }

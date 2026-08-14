@@ -153,12 +153,30 @@ const minutes = Math.max(1, Math.round((post.body ?? '').replace(/\s/g, '').leng
   </script>
   <script>
     (function () {
-      // 非微信环境（PC、其它浏览器等）直接跳过：不加载 jweixin SDK，也不请求签名接口。
-      if (!/MicroMessenger/i.test(navigator.userAgent)) return;
-
       const url = location.href.split('#')[0];
+      const isWechat = /MicroMessenger/i.test(navigator.userAgent);
+      const visitId = globalThis.crypto?.randomUUID?.()
+        ?? `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+      const reportEvent = (type: string, properties: Record<string, unknown>) => {
+        const payload = JSON.stringify({ visitId, type, url, properties });
+        if (navigator.sendBeacon) {
+          navigator.sendBeacon('/client-events', new Blob([payload], { type: 'application/json' }));
+        } else {
+          fetch('/client-events', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: payload,
+            keepalive: true
+          }).catch(() => {});
+        }
+      };
+
+      reportEvent('PAGE_OPEN', { browser: isWechat ? 'WECHAT' : 'OTHER' });
+
+      // 非微信环境只上报打开来源，不加载 jweixin SDK，也不请求签名接口。
+      if (!isWechat) return;
+
       const reportError = (errMsg: string) => {
-        // fire-and-forget；sendBeacon 不阻塞 unload，签名失败也算运维信号
         const payload = JSON.stringify({ url, errMsg });
         if (navigator.sendBeacon) {
           navigator.sendBeacon('/wechat/callback/jsapi-signature/error', new Blob([payload], { type: 'application/json' }));
@@ -198,6 +216,7 @@ const minutes = Math.max(1, Math.round((post.body ?? '').replace(/\s/g, '').leng
               wx.getNetworkType({
                 success: (res: any) => {
                   console.log('[wechat-jsapi] getNetworkType ok:', res.networkType);
+                  reportEvent('NETWORK_TYPE', { networkType: res.networkType ?? 'unknown' });
                 },
                 fail: (err: any) => {
                   console.warn('[wechat-jsapi] getNetworkType failed:', err?.errMsg);

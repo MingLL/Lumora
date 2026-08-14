@@ -70,7 +70,7 @@ spec:
   routes:
     # 回调路径更长，用更高的 priority 保证先于兜底规则命中。
     - kind: Rule
-      match: Host(`lumora.love`) && PathPrefix(`/wechat/callback`)
+      match: Host(`lumora.love`) && (PathPrefix(`/wechat/callback`) || Path(`/client-events`))
       priority: 200
       middlewares:
         - name: lumora-security-headers

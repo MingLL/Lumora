@@ -24,7 +24,8 @@ public class WebSecurityConfiguration implements WebMvcConfigurer {
 
         registry.addInterceptor(jsapiRateLimitInterceptor)
                 .addPathPatterns("/wechat/callback/jsapi-signature",
-                        "/wechat/callback/jsapi-signature/error");
+                        "/wechat/callback/jsapi-signature/error",
+                        "/client-events");
 
         registry.addInterceptor(globalRateLimitInterceptor)
                 .addPathPatterns("/wechat/callback/**")

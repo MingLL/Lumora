@@ -17,7 +17,6 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
 class WechatJsapiControllerTest {
-
     private WechatJsapiSignatureService signatureService;
     private JsapiSignatureErrorMapper errorMapper;
     private MockMvc mockMvc;
@@ -26,23 +25,17 @@ class WechatJsapiControllerTest {
     void setUp() {
         signatureService = mock(WechatJsapiSignatureService.class);
         errorMapper = mock(JsapiSignatureErrorMapper.class);
-        WechatJsapiController controller =
-                new WechatJsapiController(signatureService, errorMapper);
-        mockMvc = MockMvcBuilders.standaloneSetup(controller).build();
+        mockMvc = MockMvcBuilders.standaloneSetup(
+                new WechatJsapiController(signatureService, errorMapper)).build();
     }
 
     @Test
     void reportSignatureErrorReturnsNoContentAndPersists() throws Exception {
         String body = new ObjectMapper().writeValueAsString(
-                new WechatJsapiController.JsapiSignatureErrorReport(
-                        "https://lumora.love/posts/twenty-eight/",
-                        "invalid signature"));
-
+                new WechatJsapiController.JsapiSignatureErrorReport("https://lumora.love/", "invalid signature"));
         mockMvc.perform(post("/wechat/callback/jsapi-signature/error")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(body))
+                        .contentType(MediaType.APPLICATION_JSON).content(body))
                 .andExpect(status().isNoContent());
-
         verify(errorMapper).insert(any(JsapiSignatureErrorRecord.class));
     }
 
@@ -50,14 +43,9 @@ class WechatJsapiControllerTest {
     void reportSignatureErrorReturnsNoContentEvenWhenPersistenceFails() throws Exception {
         doThrow(new RuntimeException("database down"))
                 .when(errorMapper).insert(any(JsapiSignatureErrorRecord.class));
-        String body = new ObjectMapper().writeValueAsString(
-                new WechatJsapiController.JsapiSignatureErrorReport(
-                        "https://lumora.love/posts/twenty-eight/",
-                        "invalid signature"));
-
+        String body = "{\"url\":\"https://lumora.love/\",\"errMsg\":\"invalid signature\"}";
         mockMvc.perform(post("/wechat/callback/jsapi-signature/error")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(body))
+                        .contentType(MediaType.APPLICATION_JSON).content(body))
                 .andExpect(status().isNoContent());
 
         verify(errorMapper).insert(any(JsapiSignatureErrorRecord.class));
@@ -65,8 +53,7 @@ class WechatJsapiControllerTest {
 
     @Test
     void signatureEndpointDoesNotTouchErrorMapper() throws Exception {
-        mockMvc.perform(get("/wechat/callback/jsapi-signature")
-                        .param("url", "https://lumora.love/posts/twenty-eight/"))
+        mockMvc.perform(get("/wechat/callback/jsapi-signature").param("url", "https://lumora.love/"))
                 .andExpect(status().isOk());
         verifyNoInteractions(errorMapper);
     }

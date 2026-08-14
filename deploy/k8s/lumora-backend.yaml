@@ -48,6 +48,13 @@ spec:
   rules:
     - http:
         paths:
+          - path: /client-events
+            pathType: Exact
+            backend:
+              service:
+                name: lumora-backend-web
+                port:
+                  number: 8080
           - path: /wechat/callback
             pathType: Prefix
             backend:

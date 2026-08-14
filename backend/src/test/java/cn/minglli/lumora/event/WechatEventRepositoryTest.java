@@ -106,6 +106,15 @@ class WechatEventRepositoryTest extends PostgresContainerTest {
                 "received_at", "timestamp(6)|NO|DEFAULT CURRENT_TIMESTAMP",
                 "created_at", "timestamp(6)|NO|DEFAULT CURRENT_TIMESTAMP"));
 
+        assertThat(columns("client_event")).containsExactlyEntriesOf(mapOf(
+                "id", "bigint|NO|IDENTITY BY DEFAULT",
+                "visit_id", "varchar(64)|NO|",
+                "type", "varchar(64)|NO|",
+                "url", "varchar(2048)|NO|",
+                "properties", "jsonb|NO|DEFAULT '{}'::jsonb",
+                "received_at", "timestamp(6)|NO|DEFAULT CURRENT_TIMESTAMP",
+                "created_at", "timestamp(6)|NO|DEFAULT CURRENT_TIMESTAMP"));
+
         // MySQL's "ENGINE=InnoDB" + per-table utf8mb4_* collation don't have a PostgreSQL
         // analogue: there is one storage engine, and collation is a database/column property,
         // not a table option. The properties actually worth guarding here are that the four
@@ -119,12 +128,14 @@ class WechatEventRepositoryTest extends PostgresContainerTest {
                       'wechat_event',
                       'daily_report',
                       'report_delivery_attempt',
-                      'jsapi_signature_error'
+                      'jsapi_signature_error',
+                      'client_event'
                   )
                 ORDER BY tablename
                 """, String.class);
         assertThat(tables).containsExactly(
-                "daily_report", "jsapi_signature_error", "report_delivery_attempt", "wechat_event");
+                "client_event", "daily_report", "jsapi_signature_error",
+                "report_delivery_attempt", "wechat_event");
 
         String encoding = jdbcTemplate.queryForObject("""
                 SELECT pg_encoding_to_char(encoding)
@@ -156,6 +167,11 @@ class WechatEventRepositoryTest extends PostgresContainerTest {
         assertThat(indexes("jsapi_signature_error")).containsExactlyInAnyOrderEntriesOf(mapOf(
                 "jsapi_signature_error_pkey", "UNIQUE:id",
                 "ix_jsapi_error_received_at", "NONUNIQUE:received_at"));
+        assertThat(indexes("client_event")).containsExactlyInAnyOrderEntriesOf(mapOf(
+                "client_event_pkey", "UNIQUE:id",
+                "ix_client_event_received_at", "NONUNIQUE:received_at",
+                "ix_client_event_type_received_at", "NONUNIQUE:type,received_at",
+                "ix_client_event_visit_id", "NONUNIQUE:visit_id"));
 
         // MySQL 的前缀索引 url(255) 在 PostgreSQL 只能用表达式索引表达。断言它确实是
         // left(url, 255) 而不是整列 —— 整列 btree 对高熵多字节值会在 INSERT 时报
