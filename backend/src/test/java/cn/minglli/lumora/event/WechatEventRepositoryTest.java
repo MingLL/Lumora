@@ -49,9 +49,9 @@ class WechatEventRepositoryTest extends PostgresContainerTest {
                 "raw_msg_type", "varchar(32)|NO|",
                 "raw_event", "varchar(64)|YES|",
                 "message_id", "bigint|YES|",
-                "original_occurred_at", "timestamp(6)|NO|",
-                "effective_occurred_at", "timestamp(6)|NO|",
-                "received_at", "timestamp(6)|NO|",
+                "original_occurred_at", "timestamptz(6)|NO|",
+                "effective_occurred_at", "timestamptz(6)|NO|",
+                "received_at", "timestamptz(6)|NO|",
                 "anomalous_timestamp", "boolean|NO|DEFAULT false",
                 "deduplication_key", "varchar(71)|NO|",
                 "raw_event_key", "varchar(2048)|YES|",
@@ -68,17 +68,17 @@ class WechatEventRepositoryTest extends PostgresContainerTest {
                 "composite_sha256", "char(64)|YES|",
                 "safe_summary", "jsonb|NO|",
                 "normalized_message_sha256", "char(64)|NO|",
-                "created_at", "timestamp(6)|NO|DEFAULT CURRENT_TIMESTAMP"));
+                "created_at", "timestamptz(6)|NO|DEFAULT CURRENT_TIMESTAMP"));
 
         assertThat(columns("daily_report")).containsExactlyEntriesOf(mapOf(
                 "id", "bigint|NO|IDENTITY BY DEFAULT",
                 "report_date", "date|NO|",
                 "version", "integer|NO|",
-                "window_start", "timestamp(6)|NO|",
-                "window_end", "timestamp(6)|NO|",
-                "data_cutoff_at", "timestamp(6)|NO|",
+                "window_start", "timestamptz(6)|NO|",
+                "window_end", "timestamptz(6)|NO|",
+                "data_cutoff_at", "timestamptz(6)|NO|",
                 "snapshot_json", "jsonb|NO|",
-                "created_at", "timestamp(6)|NO|DEFAULT CURRENT_TIMESTAMP"));
+                "created_at", "timestamptz(6)|NO|DEFAULT CURRENT_TIMESTAMP"));
 
         assertThat(columns("report_delivery_attempt")).containsExactlyEntriesOf(mapOf(
                 "id", "bigint|NO|IDENTITY BY DEFAULT",
@@ -91,20 +91,20 @@ class WechatEventRepositoryTest extends PostgresContainerTest {
                 "recipient_masked", "varchar(1024)|NO|",
                 "recipient_sha256", "char(64)|NO|",
                 "attempt_count", "integer|NO|DEFAULT 0",
-                "claimed_at", "timestamp(6)|YES|",
-                "lease_until", "timestamp(6)|YES|",
-                "completed_at", "timestamp(6)|YES|",
+                "claimed_at", "timestamptz(6)|YES|",
+                "lease_until", "timestamptz(6)|YES|",
+                "completed_at", "timestamptz(6)|YES|",
                 "last_error_class", "varchar(128)|YES|",
                 "last_error_summary", "varchar(500)|YES|",
-                "created_at", "timestamp(6)|NO|DEFAULT CURRENT_TIMESTAMP",
-                "updated_at", "timestamp(6)|NO|DEFAULT CURRENT_TIMESTAMP"));
+                "created_at", "timestamptz(6)|NO|DEFAULT CURRENT_TIMESTAMP",
+                "updated_at", "timestamptz(6)|NO|DEFAULT CURRENT_TIMESTAMP"));
 
         assertThat(columns("jsapi_signature_error")).containsExactlyEntriesOf(mapOf(
                 "id", "bigint|NO|IDENTITY BY DEFAULT",
                 "url", "varchar(2048)|NO|",
                 "err_msg", "varchar(1024)|NO|",
-                "received_at", "timestamp(6)|NO|DEFAULT CURRENT_TIMESTAMP",
-                "created_at", "timestamp(6)|NO|DEFAULT CURRENT_TIMESTAMP"));
+                "received_at", "timestamptz(6)|NO|DEFAULT CURRENT_TIMESTAMP",
+                "created_at", "timestamptz(6)|NO|DEFAULT CURRENT_TIMESTAMP"));
 
         assertThat(columns("client_event")).containsExactlyEntriesOf(mapOf(
                 "id", "bigint|NO|IDENTITY BY DEFAULT",
@@ -112,8 +112,8 @@ class WechatEventRepositoryTest extends PostgresContainerTest {
                 "type", "varchar(64)|NO|",
                 "url", "varchar(2048)|NO|",
                 "properties", "jsonb|NO|DEFAULT '{}'::jsonb",
-                "received_at", "timestamp(6)|NO|DEFAULT CURRENT_TIMESTAMP",
-                "created_at", "timestamp(6)|NO|DEFAULT CURRENT_TIMESTAMP"));
+                "received_at", "timestamptz(6)|NO|DEFAULT CURRENT_TIMESTAMP",
+                "created_at", "timestamptz(6)|NO|DEFAULT CURRENT_TIMESTAMP"));
 
         // MySQL's "ENGINE=InnoDB" + per-table utf8mb4_* collation don't have a PostgreSQL
         // analogue: there is one storage engine, and collation is a database/column property,
@@ -374,6 +374,9 @@ class WechatEventRepositoryTest extends PostgresContainerTest {
             case "numeric" -> "numeric(" + resultSet.getInt("numeric_precision")
                     + "," + resultSet.getInt("numeric_scale") + ")";
             case "timestamp without time zone" -> "timestamp(" + resultSet.getInt("datetime_precision") + ")";
+            // 精度必须一起断言：TIMESTAMPTZ 不写 (6) 时默认精度也是 6，但迁移写错成
+            // TIMESTAMPTZ(0) 一样能通过类型检查，微秒会被悄悄截掉。
+            case "timestamp with time zone" -> "timestamptz(" + resultSet.getInt("datetime_precision") + ")";
             default -> dataType;
         };
     }

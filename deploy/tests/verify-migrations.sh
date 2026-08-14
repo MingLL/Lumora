@@ -78,6 +78,18 @@ SELECT character_maximum_length FROM information_schema.columns
 \echo '--- JSONB 列 ---'
 SELECT table_name, column_name, data_type FROM information_schema.columns
  WHERE data_type='jsonb' ORDER BY table_name;
+
+-- 无时区的时间列会随写入方所在时区漂移：库内 CURRENT_TIMESTAMP 按会话时区折算，
+-- 应用经 pgjdbc 写入的值按 JVM 默认时区折算，两者一变就错开一整个偏移量。V5 之后
+-- 这里必须是空的。
+\echo '--- 无时区的时间列（必须为空）---'
+SELECT table_name, column_name FROM information_schema.columns
+ WHERE table_schema='public' AND table_name <> 'flyway_schema_history'
+   AND data_type='timestamp without time zone' ORDER BY 1, 2;
+
+\echo '--- 时间列精度必须都是 6（写成 TIMESTAMPTZ(0) 会悄悄截掉微秒）---'
+SELECT DISTINCT datetime_precision FROM information_schema.columns
+ WHERE table_schema='public' AND data_type='timestamp with time zone';
 SQL
 
 step "行为验证：触发器真的会刷新 updated_at，生成列真的按 trigger_type 取值"

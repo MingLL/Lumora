@@ -8,7 +8,18 @@ spring:
     driver-class-name: org.postgresql.Driver
     hikari:
       # 取代 MySQL URL 上的 connectionTimeZone=UTC&forceConnectionTimeZoneToSession=true。
-      # 应用统一按 UTC 存取，会话时区必须钉死，否则容器时区一变读出来的时间就偏。
+      #
+      # 注意这行管得到什么、管不到什么 —— 这里曾经写着「会话时区必须钉死，否则容器
+      # 时区一变读出来的时间就偏」，是错的，并且误导过一次排查：会话时区只决定
+      # CURRENT_TIMESTAMP 这类库内取值的折算，而应用经 MyBatis InstantTypeHandler
+      # 写入的列走的是 ps.setTimestamp(i, Timestamp.from(instant))，不带 Calendar，
+      # 由 pgjdbc 按「JVM 默认时区」渲染 —— 这行完全够不着那条路。
+      #
+      # 真正的兜底是 V5 迁移：时间列全部是 TIMESTAMPTZ，偏移量存在值里，两条写入
+      # 路径都按绝对时刻处理，容器时区怎么变都不影响存进去的是哪一刻。
+      # 保留这行只是让 timestamptz 渲染成文本时（人工排查、误加的 ::timestamp 转换）
+      # 有个确定的基准，不再承担正确性。cn.minglli.lumora.schema
+      # .TimestampTimeZoneContractTest 守着「不许再出现无时区的时间列」。
       connection-init-sql: SET TIME ZONE 'UTC'
   flyway:
     enabled: false
