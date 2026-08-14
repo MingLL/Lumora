@@ -24,7 +24,10 @@ services:
 
   postgres:
     image: postgres:17-alpine
-    command: ["-c", "timezone=UTC"]
+    # 人工排查时的显示基准，与 deploy/k8s/lumora-postgres.yaml 保持一致（那里有完整
+    # 说明）。V5 把时间列全换成 TIMESTAMPTZ 之后会话时区只影响渲染，不再影响存的是
+    # 哪一刻；应用侧仍由 Hikari 的 connection-init-sql 钉在 UTC。
+    command: ["-c", "timezone=Asia/Shanghai"]
     environment:
       POSTGRES_DB: ${POSTGRES_DATABASE}
       POSTGRES_USER: ${POSTGRES_USERNAME}

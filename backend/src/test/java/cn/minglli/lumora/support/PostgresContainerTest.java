@@ -50,7 +50,12 @@ public abstract class PostgresContainerTest {
         registry.add("spring.datasource.url", POSTGRES::getJdbcUrl);
         registry.add("spring.datasource.username", POSTGRES::getUsername);
         registry.add("spring.datasource.password", POSTGRES::getPassword);
-        registry.add("spring.datasource.hikari.connection-init-sql", () -> "SET TIME ZONE 'UTC'");
+        // 这里故意不再注册 connection-init-sql，让它来自 application.yml。
+        // @DynamicPropertySource 的优先级高于 application.yml，之前在这里重复注册一份
+        // 'SET TIME ZONE UTC'，等于让 WechatEventRepositoryTest 的
+        // configuresEveryJdbcSessionForUtc 断言测试自己写死的值：把 application.yml 里
+        // 那行删掉、或改成别的时区，测试照样绿。实测确认过（改成 America/New_York 仍然
+        // 通过）。去掉之后它才真正盯着生产配置。
     }
 
     @BeforeAll

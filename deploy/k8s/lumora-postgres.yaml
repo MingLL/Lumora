@@ -49,9 +49,22 @@ spec:
           image: public.ecr.aws/docker/library/postgres:17-alpine
           imagePullPolicy: IfNotPresent
           args:
-            # 应用侧统一用 UTC 存取，库也钉在 UTC，避免跨时区偏移。
+            # 人工排查时的显示基准。V5 之前这里必须是 UTC —— 那时时间列是无时区的
+            # timestamp，服务器时区会决定 CURRENT_TIMESTAMP 默认值折算成哪个墙钟，
+            # 一改就和应用经 pgjdbc 写入的列错开 8 小时。V5 把时间列全换成
+            # TIMESTAMPTZ 之后，值自带偏移量，会话时区只影响渲染，不再影响存的是
+            # 哪一刻，所以这里可以按人看着方便来设。
+            #
+            # 确认过 mapper 与迁移里没有 date_trunc / EXTRACT / ::date / to_char
+            # 这类依赖会话时区的表达式，改这个碰不到任何查询语义。
+            # 应用侧不受影响：Hikari 的 connection-init-sql 每条连接都会把自己的
+            # 会话钉回 UTC（WechatEventRepositoryTest 断言了这一点）。
+            #
+            # 注意这行只在 PostgreSQL 重启后才生效。线上是用
+            # `ALTER DATABASE lumora SET TimeZone = 'Asia/Shanghai'` 免重启落地的，
+            # 库级设置本来就覆盖服务器级，两者同值，重建集群时行为一致。
             - "-c"
-            - "timezone=UTC"
+            - "timezone=Asia/Shanghai"
             # 0.3 MB 的库，默认值是给独占服务器调的，全部收小。
             - "-c"
             - "shared_buffers=32MB"
