@@ -245,6 +245,19 @@ ssh dev1 'cat /var/log/lumora/.collect-state'       # 上次收集到哪个时�
 
 ## 排查
 
+### 高风险来源 IP 巡检
+
+从本机经 SSH 读取 `dev1` 最近 7 天的访问归档与 SSH 认证日志，只输出统计结果，
+不会封禁 IP 或修改服务器：
+
+```bash
+./deploy/audit-high-risk-ips.sh
+./deploy/audit-high-risk-ips.sh --days 30
+```
+
+输出包含敏感路径扫描的来源 IP、敏感路径是否出现非 4xx 响应，以及 SSH 失败和
+已接受公钥的来源统计。对发现的 IP 应先确认业务归属，再单独执行封禁。
+
 ```bash
 # pod 状态
 ssh dev1 'k3s kubectl -n lumora get pod -o wide'
