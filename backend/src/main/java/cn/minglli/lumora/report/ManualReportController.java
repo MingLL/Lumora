@@ -63,7 +63,7 @@ public class ManualReportController {
         boolean force = request != null && Boolean.TRUE.equals(request.force());
 
         DailyReportSnapshot snapshot = dailyReportService.getOrCreateSnapshotForDate(date, regenerate);
-        DailyReportRecord record = dailyReportMapper.findByDateAndVersion(date, snapshot.version());
+        DailyReportRecord record = dailyReportMapper.findByDateAndVersion(snapshot.reportDate(), snapshot.version());
         if (record == null) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body(new ManualSendResponse("ERROR", "Snapshot not found", null));

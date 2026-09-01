@@ -51,7 +51,7 @@ class WorkerReadinessVerifierTest {
     @Test
     void withAMissingScheduledTaskThereIsNoMarker() {
         Set<String> withoutRetention = Set.of(
-                "cn.minglli.lumora.report.DailyReportScheduler.runDailyReport()",
+                "cn.minglli.lumora.report.DailyReportScheduler.runWeeklyReport()",
                 "cn.minglli.lumora.report.ReportRecoveryScheduler.recoverStaleDeliveries()");
 
         boolean verified = verifier(withoutRetention, () -> { }).verify();
@@ -107,7 +107,7 @@ class WorkerReadinessVerifierTest {
 
     private static Set<String> allTasks() {
         return Set.of(
-                "cn.minglli.lumora.report.DailyReportScheduler.runDailyReport()",
+                "cn.minglli.lumora.report.DailyReportScheduler.runWeeklyReport()",
                 "cn.minglli.lumora.report.ReportRecoveryScheduler.recoverStaleDeliveries()",
                 "cn.minglli.lumora.event.EventRetentionScheduler.runRetention()");
     }

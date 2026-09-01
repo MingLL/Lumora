@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# 在 dev1 上安装每日访问日报：脚本 + 目录 + 凭证模板 + cron。
+# 在 dev1 上安装每周访问周报：脚本 + 目录 + 凭证模板 + cron。
 #
 #   ./deploy/setup-report.sh
 #
@@ -33,7 +33,7 @@ else
   # 本地写好再传，避免 heredoc 嵌在 ssh 的引号里被二次解析
   tmp=$(mktemp)
   cat > "$tmp" <<'ENVTEMPLATE'
-# 每日访问日报的发信配置。
+# 每周访问周报的发信配置。
 #
 # QQ 邮箱授权码申请：登录 mail.qq.com → 设置 → 账户 →
 # 开启「IMAP/SMTP 服务」→ 生成授权码。填在下面 SMTP_PASS，
@@ -46,7 +46,7 @@ SMTP_PORT=465
 SMTP_USER=你的QQ号@qq.com
 SMTP_PASS=在这里填授权码
 MAIL_FROM=你的QQ号@qq.com
-MAIL_TO=接收日报的邮箱
+MAIL_TO=接收周报的邮箱
 ENVTEMPLATE
   scp -q "$tmp" "$HOST:$ENV_FILE"
   ssh "$HOST" "chmod 600 $ENV_FILE"
@@ -64,8 +64,8 @@ cat >> "$TMP" <<'CRON'
 PATH=/usr/local/bin:/usr/bin:/bin
 # 每小时增量归档访问日志（pod 重启会清空容器日志，所以要及时落盘）
 5 * * * * /opt/lumora/bin/daily-report.py collect >> /var/log/lumora/cron.log 2>&1
-# 每天早上 7:00 统计前一天并发邮件
-0 7 * * * /opt/lumora/bin/daily-report.py report >> /var/log/lumora/cron.log 2>&1
+# 每周一早上 7:00 统计上一完整周并发邮件
+0 7 * * 1 /opt/lumora/bin/daily-report.py report >> /var/log/lumora/cron.log 2>&1
 CRON
 crontab "$TMP"
 rm -f "$TMP"
@@ -88,5 +88,5 @@ cat <<EOF
     ssh $HOST '$BIN_DIR/daily-report.py test-mail'     # 发一封测试信
     ssh $HOST '$BIN_DIR/daily-report.py report --dry-run'  # 只生成不发送
 
-之后每天 07:00 自动发送，日志在 $LOG_DIR/cron.log。
+之后每周一 07:00 自动发送，日志在 $LOG_DIR/cron.log。
 EOF

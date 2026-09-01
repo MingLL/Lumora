@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-远方有温度 —— 每日访问日报。
+远方有温度 —— 每周访问周报。
 
 在 dev1（k3s control-plane）上运行。站点的 nginx 跑在两个节点上，日志各写各的，
 而 dev1 没法 ssh 到 dev2，所以日志统一通过 `kubectl logs -l app=lumora-web` 收，
@@ -10,13 +10,13 @@
 两个子命令，分别对应两条 cron：
 
     daily-report.py collect     每小时跑，把新日志追加到磁盘归档
-    daily-report.py report      每天 07:00 跑，统计前一天并发邮件
+    daily-report.py report      每周一 07:00 跑，统计上一完整周并发邮件
 
 为什么要分开：kubectl logs 读的是容器的日志文件，pod 一重启就只剩新容器的内容。
-每小时增量归档，pod 重启最多影响一小时，而不是整份日报。
+每小时增量归档，pod 重启最多影响一小时，而不是整份周报。
 
     daily-report.py report --dry-run        只生成 HTML，不发信（调试用）
-    daily-report.py report --date 2026-07-26  补发指定日期
+    daily-report.py report --date 2026-07-26  补发以该周日结束的一周
     daily-report.py test-mail               发一封测试信，验证 SMTP 配置
 
 Python 3.6 兼容（Alibaba Cloud Linux 3 自带的版本），别用 dataclasses / walrus。
@@ -425,6 +425,14 @@ def load_day(day):
     return entries
 
 
+def load_week(week_end):
+    """读取以周日 week_end 结束的完整一周（周一至周日）。"""
+    entries = []
+    for offset in range(6, -1, -1):
+        entries.extend(load_day(week_end - timedelta(days=offset)))
+    return entries
+
+
 # ---------------------------------------------------------------- 归类
 
 def is_bot(ua):
@@ -655,7 +663,8 @@ def human_bytes(n):
     return "%.1f TB" % n
 
 
-def render(day, stats, prev):
+def render(week_end, stats, prev):
+    week_start = week_end - timedelta(days=6)
     e = html.escape
     css_card = "background:#fff;border:1px solid #e8e2d8;border-radius:10px;padding:18px 20px;margin-bottom:16px"
     css_h2 = "margin:0 0 12px;font-size:15px;color:#2f2a24;font-weight:600"
@@ -671,9 +680,10 @@ def render(day, stats, prev):
     )
     parts.append(
         '<div style="margin-bottom:20px">'
-        '<div style="font-size:12px;color:#9a9285;letter-spacing:.1em">%s · 访问日报</div>'
-        '<div style="font-size:22px;font-weight:600;margin-top:4px">%s</div>'
-        '</div>' % (e(SITE_NAME), day.strftime("%Y 年 %m 月 %d 日"))
+        '<div style="font-size:12px;color:#9a9285;letter-spacing:.1em">%s · 访问周报</div>'
+        '<div style="font-size:22px;font-weight:600;margin-top:4px">%s 至 %s</div>'
+        '</div>' % (e(SITE_NAME), week_start.strftime("%Y 年 %m 月 %d 日"),
+                    week_end.strftime("%Y 年 %m 月 %d 日"))
     )
 
     # 概览
@@ -718,7 +728,7 @@ def render(day, stats, prev):
             )
         parts.append('</table>')
     else:
-        parts.append('<div style="font-size:13px;color:#9a9285">今天没有页面访问。</div>')
+        parts.append('<div style="font-size:13px;color:#9a9285">本周没有页面访问。</div>')
     parts.append('</div>')
 
     # 来源与设备
@@ -853,7 +863,7 @@ def render(day, stats, prev):
     parts.append(
         '<div style="font-size:11px;color:#b3aca1;text-align:center;margin-top:18px;line-height:1.7">'
         'https://lumora.love<br>'
-        '由 dev1 上的 daily-report.py 于每日 07:00 生成</div>'
+        '由 dev1 上的 daily-report.py 于每周一 07:00 生成</div>'
     )
     parts.append('</div>')
     return "\n".join(parts)
@@ -913,20 +923,23 @@ def send_mail(subject, body_html, conf):
 
 def cmd_report(args, provider=None):
     if args.date:
-        day = datetime.strptime(args.date, "%Y-%m-%d").date()
+        week_end = datetime.strptime(args.date, "%Y-%m-%d").date()
+        if week_end.weekday() != 6:
+            raise SystemExit("--date 必须是周日（周报统计区间为周一至周日）")
     else:
-        day = (datetime.now(CST) - timedelta(days=1)).date()
+        today = datetime.now(CST).date()
+        week_end = today - timedelta(days=today.weekday() + 1)
 
-    entries = load_day(day)
+    entries = load_week(week_end)
     stats = summarize(entries)
     if provider is None:
         provider = OnlineGeoProvider(GEO_CACHE_FILE)
     enrich_top_visitors(stats, provider)
-    prev = load_previous(day - timedelta(days=1))
-    body = render(day, stats, prev)
+    prev = load_previous(week_end - timedelta(days=7))
+    body = render(week_end, stats, prev)
 
     if args.dry_run:
-        out = args.out or "/tmp/lumora-report-%s.html" % day.strftime("%Y-%m-%d")
+        out = args.out or "/tmp/lumora-report-%s.html" % week_end.strftime("%Y-%m-%d")
         with open(out, "w") as f:
             f.write(body)
         log("报告已生成: %s" % out)
@@ -938,10 +951,11 @@ def cmd_report(args, provider=None):
     if conf is None:
         raise SystemExit("找不到配置文件 %s" % ENV_FILE)
 
-    subject = "%s 日报 · %s · PV %d / UV %d" % (
-        SITE_NAME, day.strftime("%m-%d"), stats["pv"], stats["uv"])
+    subject = "%s 周报 · %s 至 %s · PV %d / UV %d" % (
+        SITE_NAME, (week_end - timedelta(days=6)).strftime("%m-%d"),
+        week_end.strftime("%m-%d"), stats["pv"], stats["uv"])
     send_mail(subject, body, conf)
-    save_stats(day, stats)
+    save_stats(week_end, stats)
     log("已发送: %s" % subject)
     return 0
 
@@ -954,23 +968,23 @@ def cmd_test_mail(args):
         '<div style="font-family:sans-serif;padding:20px">'
         '<h2 style="color:#2f2a24">SMTP 配置正常</h2>'
         '<p style="color:#4a443c">这封信来自 dev1 上的 daily-report.py。'
-        '收到它说明发信链路通了，日报会在每天早上 7:00 送达。</p>'
+        '收到它说明发信链路通了，周报会在每周一早上 7:00 送达。</p>'
         '<p style="color:#9a9285;font-size:12px">发信时间：%s</p></div>'
         % datetime.now(CST).strftime("%Y-%m-%d %H:%M:%S CST")
     )
-    send_mail("%s · 日报配置测试" % SITE_NAME, body, conf)
+    send_mail("%s · 周报配置测试" % SITE_NAME, body, conf)
     log("测试邮件已发送")
     return 0
 
 
 def main():
-    parser = argparse.ArgumentParser(description="站点访问日报")
+    parser = argparse.ArgumentParser(description="站点访问周报")
     sub = parser.add_subparsers(dest="cmd")
 
     sub.add_parser("collect", help="增量归档访问日志（每小时）")
 
-    p_report = sub.add_parser("report", help="生成并发送日报（每天 07:00）")
-    p_report.add_argument("--date", help="指定日期 YYYY-MM-DD，默认昨天")
+    p_report = sub.add_parser("report", help="生成并发送周报（每周一 07:00）")
+    p_report.add_argument("--date", help="指定周末日期 YYYY-MM-DD（周日），默认上周日")
     p_report.add_argument("--dry-run", action="store_true", help="只生成 HTML，不发信")
     p_report.add_argument("--out", help="--dry-run 时的输出路径")
 

@@ -37,13 +37,13 @@ public class DailyReportService {
 
     @Transactional
     public DailyReportSnapshot getOrCreateAutoSnapshot() {
-        ReportWindow window = ReportWindow.forYesterday(clock, properties.getZone());
+        ReportWindow window = ReportWindow.forPreviousCompletedWeek(clock, properties.getZone());
         return getOrCreateSnapshotForDate(window.reportDate(), false);
     }
 
     @Transactional
     public DailyReportSnapshot getOrCreateSnapshotForDate(LocalDate date, boolean regenerate) {
-        ReportWindow window = ReportWindow.forDate(date, properties.getZone());
+        ReportWindow window = ReportWindow.forWeekContaining(date, properties.getZone());
         if (regenerate) {
             Integer maxVersion = mapper.findMaxVersion(window.reportDate());
             int nextVersion = (maxVersion == null ? 0 : maxVersion) + 1;
@@ -74,7 +74,7 @@ public class DailyReportService {
 
     @Transactional
     public DailyReportSnapshot regenerateSnapshot() {
-        ReportWindow window = ReportWindow.forYesterday(clock, properties.getZone());
+        ReportWindow window = ReportWindow.forPreviousCompletedWeek(clock, properties.getZone());
         return getOrCreateSnapshotForDate(window.reportDate(), true);
     }
 

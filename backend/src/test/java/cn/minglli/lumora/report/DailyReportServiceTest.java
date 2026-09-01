@@ -27,10 +27,10 @@ import static org.assertj.core.api.Assertions.assertThat;
 class DailyReportServiceTest extends PostgresContainerTest {
 
     private static final ZoneId SHANGHAI = ZoneId.of("Asia/Shanghai");
-    private static final Clock CLOCK = Clock.fixed(Instant.parse("2026-07-28T02:00:00Z"), SHANGHAI);
+    private static final Clock CLOCK = Clock.fixed(Instant.parse("2026-08-03T02:00:00Z"), SHANGHAI);
     private static final Instant IN_WINDOW = Instant.parse("2026-07-27T05:00:00Z");
     private static final Instant RECEIVED = Instant.parse("2026-07-27T06:00:00Z");
-    private static final Instant AFTER_CUTOFF = Instant.parse("2026-07-28T03:00:00Z");
+    private static final Instant AFTER_CUTOFF = Instant.parse("2026-08-03T03:00:00Z");
 
     @Autowired
     private DailyReportMapper mapper;
@@ -130,7 +130,7 @@ class DailyReportServiceTest extends PostgresContainerTest {
         seedFixture();
         service.getOrCreateAutoSnapshot();
 
-        insert(event("late2", EventType.SUBSCRIBE, "o50", null, null, null, "subscribe", false, IN_WINDOW, Instant.parse("2026-07-27T07:00:00Z")));
+        insert(event("late2", EventType.SUBSCRIBE, "o50", null, null, null, "subscribe", false, IN_WINDOW, Instant.parse("2026-08-03T02:30:00Z")));
 
         DailyReportSnapshot regenerated = service.regenerateSnapshot();
 
@@ -209,7 +209,7 @@ class DailyReportServiceTest extends PostgresContainerTest {
     }
 
     private DailyReportSnapshot loadVersion(int version) {
-        DailyReportRecord record = mapper.findByDateAndVersion(java.time.LocalDate.of(2026, 7, 27), version);
+        DailyReportRecord record = mapper.findByDateAndVersion(java.time.LocalDate.of(2026, 8, 2), version);
         try {
             return objectMapper.readValue(record.snapshotJson(), DailyReportSnapshot.class);
         } catch (Exception e) {

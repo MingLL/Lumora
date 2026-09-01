@@ -21,7 +21,7 @@ import org.slf4j.LoggerFactory;
  * "healthy" has to mean "actually doing background work" — not merely "process
  * started". A worker that came up with the wrong flags, or without a database,
  * or with no scheduled tasks registered, must never satisfy its health check;
- * otherwise the release completes with nobody sending the daily report.
+ * otherwise the release completes with nobody sending the weekly report.
  *
  * <p>The marker file is written to a temporary path and then atomically moved
  * into place, so a health check never observes a half-written marker. It lives
@@ -33,7 +33,7 @@ public class WorkerReadinessVerifier {
 
     /** Scheduled methods a worker must have registered, as {@code Class.method}. */
     static final List<String> REQUIRED_TASKS = List.of(
-            "DailyReportScheduler.runDailyReport",
+            "DailyReportScheduler.runWeeklyReport",
             "ReportRecoveryScheduler.recoverStaleDeliveries",
             "EventRetentionScheduler.runRetention");
 

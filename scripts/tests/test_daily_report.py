@@ -107,6 +107,20 @@ class TopVisitorsTest(unittest.TestCase):
         self.assertEqual(self.top_visitors(stats), [])
 
 
+class WeeklyLoadingTest(unittest.TestCase):
+    def test_load_week_combines_monday_through_sunday(self):
+        week_end = datetime(2026, 8, 2).date()
+        with mock.patch.object(daily_report, "load_day", side_effect=lambda day: [day]):
+            days = daily_report.load_week(week_end)
+
+        self.assertEqual(days, [
+            datetime(2026, 7, 27).date(), datetime(2026, 7, 28).date(),
+            datetime(2026, 7, 29).date(), datetime(2026, 7, 30).date(),
+            datetime(2026, 7, 31).date(), datetime(2026, 8, 1).date(),
+            datetime(2026, 8, 2).date(),
+        ])
+
+
 class EnrichmentTest(unittest.TestCase):
     class FakeProvider(object):
         def __init__(self, results):
@@ -250,7 +264,7 @@ class ReportRenderingTest(unittest.TestCase):
             "8.8.8.8": {"country": "US", "region": "", "city": "",
                          "isp": "", "status": "ok"},
         })
-        args = argparse.Namespace(date="2026-08-03", dry_run=True, out="report.html")
+        args = argparse.Namespace(date="2026-08-02", dry_run=True, out="report.html")
         with tempfile.TemporaryDirectory() as tempdir:
             args.out = os.path.join(tempdir, "report.html")
             with mock.patch.object(daily_report, "load_day", return_value=[entry("8.8.8.8")]), \

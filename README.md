@@ -1,13 +1,13 @@
 # Lumora
 
 「远方有温度」的前后端单仓库：一个 Astro 静态站，加一个负责微信公众号事件收集与
-每日邮件日报的 Spring Boot 服务。
+每周邮件周报的 Spring Boot 服务。
 
 ```text
 frontend/     Astro 静态站（组件、字体子集脚本）
 backend/      Spring Boot 服务（微信回调、日报、PostgreSQL）
 deploy/       前后端的 k3s 部署清单、发布脚本与契约测试
-scripts/      运维与分析脚本：访问日报、访问日志安全分析、微信本地联调助手、
+scripts/      运维与分析脚本：访问周报、访问日志安全分析、微信本地联调助手、
               内容仓库挂载（逐个说明见 scripts/README.md）
 docs/         设计与方案文档
 content/      文章正文与配图，来自私有仓库，不在本仓库里（见下）
@@ -76,18 +76,18 @@ mvn -DskipTests package
 priority：后端的 `/client-events` 和 `/wechat/callback/jsapi-signature`（300，单独一条
 是为了挂请求体大小限制）> 其余 `/wechat/callback`（200）> 前端兜底的 `/`（100）。
 
-架构、接域名 / HTTPS、后端发布顺序与回滚、每日访问日报的安装与排查，
+架构、接域名 / HTTPS、后端发布顺序与回滚、每周访问周报的安装与排查，
 都在 [deploy/README.md](deploy/README.md)。
 
-## 两份「日报」不是一回事
+## 两份「周报」不是一回事
 
 仓库里有两套日报，容易混淆：
 
-- `scripts/daily-report.py` —— **站点访问日报**。在 dev1 上用 cron 跑，
+- `scripts/daily-report.py` —— **站点访问周报**。在 dev1 上用 cron 跑，
   从 `kubectl logs` 收 nginx 访问日志，统计 PV/UV、热门页面、来源设备，
-  每天 07:00 发邮件。属于运维，跟后端服务无关。
-- `backend/` 的 `DailyReportScheduler` —— **公众号事件日报**。统计关注 / 取关、
-  扫码、菜单点击等微信回调事件，同样是每天 07:00（Asia/Shanghai）发邮件。
+  每周一 07:00 发邮件，统计上一完整周。属于运维，跟后端服务无关。
+- `backend/` 的 `DailyReportScheduler` —— **公众号事件周报**。统计关注 / 取关、
+  扫码、菜单点击等微信回调事件，同样是每周一 07:00（Asia/Shanghai）发邮件。
 
 ## 仓库历史
 

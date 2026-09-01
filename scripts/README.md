@@ -5,7 +5,7 @@
 | 脚本 | 用途 | 详细说明 |
 |---|---|---|
 | `setup-content.sh` | 克隆私有内容仓库并建立两条符号链接 | [根 README](../README.md#文章内容不在这个仓库) |
-| `daily-report.py` | 站点访问日报（cron 在 dev1 上跑） | [deploy/README.md](../deploy/README.md#每日访问日报) |
+| `daily-report.py` | 站点访问周报（cron 在 dev1 上跑） | [deploy/README.md](../deploy/README.md#每周访问周报) |
 | `dev-wechat-original-id.py`、`dev-wechat-tunnel.sh` | 微信公众号本地联调助手 | [backend/README.md](../backend/README.md#local-wechat-integration) |
 | `build_ip_access_report.py`、`filter_attack_urls.py`、`build_attack_report_docx.py` | 访问日志安全分析三件套 | 下文 |
 | `tests/test_daily_report.py` | `daily-report.py` 的单元测试（unittest，26 条，无外部依赖） | `python3 scripts/tests/test_daily_report.py` |

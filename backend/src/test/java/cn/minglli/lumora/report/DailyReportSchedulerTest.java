@@ -9,14 +9,14 @@ import static org.mockito.Mockito.when;
 class DailyReportSchedulerTest {
 
     @Test
-    void runDailyReportDelegatesToDeliveryService() {
+    void runWeeklyReportDelegatesToDeliveryService() {
         ReportDeliveryService service = mock(ReportDeliveryService.class);
         when(service.runAutoReport())
                 .thenReturn(new ReportDeliveryService.DeliveryOutcome(
                         ReportDeliveryService.DeliveryOutcome.Result.SENT, "delivery-1", null));
         DailyReportScheduler scheduler = new DailyReportScheduler(service);
 
-        scheduler.runDailyReport();
+        scheduler.runWeeklyReport();
 
         verify(service).runAutoReport();
     }

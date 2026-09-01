@@ -18,9 +18,9 @@ public class DailyReportScheduler {
         this.deliveryService = deliveryService;
     }
 
-    @Scheduled(cron = "0 0 7 * * *", zone = "${lumora.zone:Asia/Shanghai}")
-    public void runDailyReport() {
+    @Scheduled(cron = "0 0 7 * * MON", zone = "${lumora.zone:Asia/Shanghai}")
+    public void runWeeklyReport() {
         ReportDeliveryService.DeliveryOutcome outcome = deliveryService.runAutoReport();
-        log.info("Daily auto report delivery result={} deliveryId={}", outcome.result(), outcome.deliveryId());
+        log.info("Weekly auto report delivery result={} deliveryId={}", outcome.result(), outcome.deliveryId());
     }
 }

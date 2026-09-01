@@ -34,38 +34,38 @@ public class ReportTemplateRenderer {
     }
 
     private String subject(DailyReportSnapshot snapshot, String originalId) {
-        return originalId + " 微信公众号日报 - " + snapshot.reportDate();
+        return originalId + " 微信公众号周报 - " + snapshot.reportDate();
     }
 
     private String emptyHtml(DailyReportSnapshot snapshot, String originalId) {
         return """
                 <html>
                   <body>
-                    <h1>%s 微信公众号日报</h1>
-                    <p>报告日期：%s</p>
+                    <h1>%s 微信公众号周报</h1>
+                    <p>统计区间：%s 至 %s</p>
                     <p>快照版本：%d</p>
                     <p>生成时间：%s</p>
-                    <p>昨日无事件。</p>
+                    <p>本周无事件。</p>
                   </body>
                 </html>
                 """.formatted(
                 escape(originalId),
-                snapshot.reportDate(),
+                periodStart(snapshot), snapshot.reportDate(),
                 snapshot.version(),
                 generatedAt(snapshot));
     }
 
     private String emptyText(DailyReportSnapshot snapshot, String originalId) {
         return """
-                %s 微信公众号日报
-                报告日期：%s
+                %s 微信公众号周报
+                统计区间：%s 至 %s
                 快照版本：%d
                 生成时间：%s
 
-                昨日无事件。
+                本周无事件。
                 """.formatted(
                 originalId,
-                snapshot.reportDate(),
+                periodStart(snapshot), snapshot.reportDate(),
                 snapshot.version(),
                 generatedAt(snapshot));
     }
@@ -75,8 +75,8 @@ public class ReportTemplateRenderer {
         builder.append("""
                 <html>
                   <body>
-                    <h1>%s 微信公众号日报</h1>
-                    <p>报告日期：%s</p>
+                    <h1>%s 微信公众号周报</h1>
+                    <p>统计区间：%s 至 %s</p>
                     <p>快照版本：%d</p>
                     <p>生成时间：%s</p>
                     <h2>总览</h2>
@@ -93,7 +93,7 @@ public class ReportTemplateRenderer {
                       <tr><th>事件类型</th><th>事件数</th><th>去重用户数</th></tr>
                 """.formatted(
                 escape(originalId),
-                snapshot.reportDate(),
+                periodStart(snapshot), snapshot.reportDate(),
                 snapshot.version(),
                 generatedAt(snapshot),
                 snapshot.totalEvents(),
@@ -165,8 +165,8 @@ public class ReportTemplateRenderer {
     private String text(DailyReportSnapshot snapshot, String originalId) {
         StringBuilder builder = new StringBuilder();
         builder.append("""
-                %s 微信公众号日报
-                报告日期：%s
+                %s 微信公众号周报
+                统计区间：%s 至 %s
                 快照版本：%d
                 生成时间：%s
 
@@ -180,7 +180,7 @@ public class ReportTemplateRenderer {
                 【事件类型分布】
                 """.formatted(
                 originalId,
-                snapshot.reportDate(),
+                periodStart(snapshot), snapshot.reportDate(),
                 snapshot.version(),
                 generatedAt(snapshot),
                 snapshot.totalEvents(),
@@ -254,6 +254,10 @@ public class ReportTemplateRenderer {
 
     private String generatedAt(DailyReportSnapshot snapshot) {
         return snapshot.generatedAt().atZone(zone).format(GENERATED_AT_FORMATTER);
+    }
+
+    private String periodStart(DailyReportSnapshot snapshot) {
+        return snapshot.windowStart().atZone(zone).toLocalDate().toString();
     }
 
     private String escape(String value) {

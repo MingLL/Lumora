@@ -39,13 +39,13 @@ class ReportTemplateRendererTest {
     }
 
     @Test
-    void emptyDayReportStatesYesterdayHadNoEvents() {
+    void emptyWeekReportStatesThisWeekHadNoEvents() {
         DailyReportSnapshot snapshot = snapshot(true);
 
         ReportTemplateRenderer.RenderedReport rendered = renderer.render(snapshot, "gh_original");
 
-        assertThat(rendered.htmlBody()).contains("昨日无事件");
-        assertThat(rendered.textBody()).contains("昨日无事件");
+        assertThat(rendered.htmlBody()).contains("本周无事件");
+        assertThat(rendered.textBody()).contains("本周无事件");
     }
 
     @Test

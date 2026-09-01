@@ -14,24 +14,24 @@ class ReportWindowTest {
     private static final ZoneId SHANGHAI = ZoneId.of("Asia/Shanghai");
 
     @Test
-    void shanghaiYesterdayMapsToUtcHalfOpenRange() {
+    void previousCompletedWeekMapsToShanghaiMondayThroughSundayRange() {
         Clock clock = Clock.fixed(Instant.parse("2026-07-28T02:00:00Z"), SHANGHAI);
 
-        ReportWindow window = ReportWindow.forYesterday(clock, SHANGHAI);
+        ReportWindow window = ReportWindow.forPreviousCompletedWeek(clock, SHANGHAI);
 
-        assertThat(window.reportDate()).isEqualTo(LocalDate.of(2026, 7, 27));
-        assertThat(window.windowStart()).isEqualTo(Instant.parse("2026-07-26T16:00:00Z"));
-        assertThat(window.windowEnd()).isEqualTo(Instant.parse("2026-07-27T16:00:00Z"));
+        assertThat(window.reportDate()).isEqualTo(LocalDate.of(2026, 7, 26));
+        assertThat(window.windowStart()).isEqualTo(Instant.parse("2026-07-19T16:00:00Z"));
+        assertThat(window.windowEnd()).isEqualTo(Instant.parse("2026-07-26T16:00:00Z"));
     }
 
     @Test
-    void lateNightShanghaiStillReportsPreviousUtcDay() {
-        Clock clock = Clock.fixed(Instant.parse("2026-07-28T17:30:00Z"), SHANGHAI);
+    void mondayMorningReportsTheSundayThatJustEnded() {
+        Clock clock = Clock.fixed(Instant.parse("2026-08-03T01:30:00Z"), SHANGHAI);
 
-        ReportWindow window = ReportWindow.forYesterday(clock, SHANGHAI);
+        ReportWindow window = ReportWindow.forPreviousCompletedWeek(clock, SHANGHAI);
 
-        assertThat(window.reportDate()).isEqualTo(LocalDate.of(2026, 7, 28));
-        assertThat(window.windowStart()).isEqualTo(Instant.parse("2026-07-27T16:00:00Z"));
-        assertThat(window.windowEnd()).isEqualTo(Instant.parse("2026-07-28T16:00:00Z"));
+        assertThat(window.reportDate()).isEqualTo(LocalDate.of(2026, 8, 2));
+        assertThat(window.windowStart()).isEqualTo(Instant.parse("2026-07-26T16:00:00Z"));
+        assertThat(window.windowEnd()).isEqualTo(Instant.parse("2026-08-02T16:00:00Z"));
     }
 }

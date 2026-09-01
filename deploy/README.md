@@ -152,9 +152,9 @@ spec:
         - 你的域名
 ```
 
-## 每日访问日报
+## 每周访问周报
 
-每天早上 07:00（服务器时区就是 CST，不用换算）把前一天的访问情况发到邮箱。
+每周一早上 07:00（服务器时区就是 CST，不用换算）把上一完整周（周一至周日）的访问情况发到邮箱。
 内容包括 PV/UV 及环比、热门页面（带文章标题）、来源与设备构成、404 与服务器错误、时段分布。
 
 安装（可反复执行，不会覆盖已填好的凭证）：
@@ -178,14 +178,14 @@ vi /etc/lumora/report.env      # 填 SMTP_USER 和 SMTP_PASS
 ```bash
 ssh dev1 '/opt/lumora/bin/daily-report.py test-mail'                    # 发测试信
 ssh dev1 '/opt/lumora/bin/daily-report.py report --dry-run'             # 只生成不发送
-ssh dev1 '/opt/lumora/bin/daily-report.py report --date 2026-07-27 --dry-run'  # 补看某天
+ssh dev1 '/opt/lumora/bin/daily-report.py report --date 2026-07-26 --dry-run'  # 补看截至该周日的一周
 ```
 
 ### 它是怎么工作的
 
 ```
 每小时 :05   daily-report.py collect  ──→ /var/log/lumora/access-YYYY-MM-DD.log
-每天 07:00   daily-report.py report   ──→ 统计前一天 ──→ QQ SMTP(465) ──→ 邮箱
+每周一 07:00 daily-report.py report   ──→ 统计上一完整周 ──→ QQ SMTP(465) ──→ 邮箱
 ```
 
 几个绕不开的约束，决定了它为什么长这样：
