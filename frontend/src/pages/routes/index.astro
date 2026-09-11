@@ -1,0 +1,23 @@
+---
+import SiteLayout from '@/layouts/SiteLayout.astro';
+import RouteCard from '@/components/RouteCard.astro';
+import { routes } from '@/data/routes';
+---
+
+<SiteLayout title="城市摄影路线" description="把真实走过、拍过的城市整理成可以照着走的摄影路线。">
+  <section class="container-page py-12 md:py-16">
+    <div class="max-w-3xl">
+      <p class="section-kicker">PHOTO WALK</p>
+      <h1 class="mt-4 font-serif text-4xl text-ink md:text-6xl">城市摄影路线</h1>
+      <p class="mt-5 text-lg leading-8 text-muted">不只是照片合集。这里标出从哪里开始、依次怎么走、什么时候光线更好，以及我实际拍摄时遇到的事情。</p>
+    </div>
+
+    <div class="mt-11 grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+      {routes.map((route) => <RouteCard route={route} />)}
+    </div>
+
+    <div class="mt-14 border-t border-line pt-8 text-sm leading-7 text-muted">
+      <p>路线会从已有的扫街周记中陆续整理出来。地点开放情况可能变化，出发前请以现场公告为准。</p>
+    </div>
+  </section>
+</SiteLayout>

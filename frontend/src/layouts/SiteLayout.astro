@@ -15,6 +15,7 @@ interface Props {
   author?: string;
   section?: string;
   tags?: string[];
+  jsonLd?: Record<string, unknown> | Record<string, unknown>[];
 }
 
 const {
@@ -26,11 +27,13 @@ const {
   author,
   section,
   tags = [],
+  jsonLd,
 } = Astro.props;
 const pageTitle = title === site.name ? title : `${title}｜${site.name}`;
 const canonical = new URL(Astro.url.pathname, Astro.site);
 const ogImage = new URL(image, Astro.site);
 const isArticle = type === 'article';
+const serializedJsonLd = jsonLd ? JSON.stringify(jsonLd).replaceAll('<', '\\u003c') : '';
 ---
 
 <!doctype html>
@@ -69,6 +72,7 @@ const isArticle = type === 'article';
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <link rel="canonical" href={canonical} />
     <link rel="alternate" type="application/rss+xml" title={site.name} href="/rss.xml" />
+    {jsonLd && <script is:inline type="application/ld+json" set:html={serializedJsonLd}></script>}
     {/* 字体自托管：Google Fonts 在国内不可达。@font-face 见 src/styles/fonts.css，
         文件由 scripts/build-fonts.py 按站点实际字符子集化生成，文件名带内容 hash，
         所以预加载列表也由脚本产出，不能在这里写死。只抢跑正文字重，

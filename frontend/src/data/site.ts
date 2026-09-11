@@ -9,6 +9,7 @@ export const site = {
     { href: '/archive', label: '文章归档' },
     { href: '/timeline', label: '成长时间线' },
     { href: '/street', label: '扫街周记' },
+    { href: '/routes', label: '摄影路线' },
     { href: '/cities', label: '城市地图' },
     { href: '/about', label: '关于' }
   ]

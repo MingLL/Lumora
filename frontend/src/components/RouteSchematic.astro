@@ -1,0 +1,36 @@
+---
+import type { CityRoute } from '@/data/routes';
+
+interface Props {
+  route: CityRoute;
+}
+
+const { route } = Astro.props;
+const points = route.stops.map((stop) => `${stop.mapX},${stop.mapY}`).join(' ');
+---
+
+<div class="relative overflow-hidden rounded-[6px] border border-line bg-card" aria-label={`${route.shortTitle}示意图`}>
+  <svg class="block aspect-[4/5] w-full" viewBox="0 0 100 100" role="img" aria-labelledby="route-map-title route-map-desc">
+    <title id="route-map-title">{route.shortTitle}示意图</title>
+    <desc id="route-map-desc">从{route.stops[0].name}出发，依次经过{route.stops.slice(1).map((stop) => stop.name).join('、')}</desc>
+    <defs>
+      <pattern id="paper-grid" width="8" height="8" patternUnits="userSpaceOnUse">
+        <path d="M 8 0 L 0 0 0 8" fill="none" stroke="#dfd6c3" stroke-width="0.22" opacity="0.7" />
+      </pattern>
+    </defs>
+    <rect width="100" height="100" fill="#fcf9f2" />
+    <rect width="100" height="100" fill="url(#paper-grid)" />
+    <path d="M4 43 C24 36 28 45 45 42 S70 35 96 42" fill="none" stroke="#dfd6c3" stroke-width="1.4" opacity="0.65" />
+    <path d="M23 4 C30 23 24 37 35 52 S30 78 20 96" fill="none" stroke="#e8e0cc" stroke-width="1" />
+    <polyline points={points} fill="none" stroke="#9e372b" stroke-width="1.35" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="2 1.4" />
+    {route.stops.map((stop, index) => (
+      <g>
+        <circle cx={stop.mapX} cy={stop.mapY} r="4.2" fill="#9e372b" />
+        <text x={stop.mapX} y={stop.mapY + 1.5} text-anchor="middle" fill="#fff8ec" font-size="4.2" font-family="IBM Plex Mono, monospace">{index + 1}</text>
+      </g>
+    ))}
+  </svg>
+  <ol class="absolute inset-x-4 bottom-4 grid grid-cols-2 gap-x-4 gap-y-1.5 rounded-[4px] bg-paper/92 p-3 text-[11px] text-muted shadow-paper backdrop-blur">
+    {route.stops.map((stop, index) => <li><span class="font-mono text-accent">{String(index + 1).padStart(2, '0')}</span> {stop.name}</li>)}
+  </ol>
+</div>

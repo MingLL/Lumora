@@ -5,6 +5,7 @@ import SiteLayout from '@/layouts/SiteLayout.astro';
 import SubscribeCard from '@/components/SubscribeCard.astro';
 import { site } from '@/data/site';
 import { coverPlaceholder } from '@/lib/image-meta.mjs';
+import { routeForPost } from '@/data/routes';
 
 interface Props {
   post: CollectionEntry<'blog'>;
@@ -15,6 +16,7 @@ interface Props {
 const { post, previous, next } = Astro.props;
 const { Content } = await render(post);
 const coverStyle = await coverPlaceholder(post.data.cover);
+const relatedRoute = routeForPost(post.id);
 
 const stamp = (date: Date) =>
   `${date.getFullYear()}.${String(date.getMonth() + 1).padStart(2, '0')}.${String(date.getDate()).padStart(2, '0')}`;
@@ -86,6 +88,17 @@ const minutes = Math.max(1, Math.round((post.body ?? '').replace(/\s/g, '').leng
           </div>
         )}
       </div>
+
+      {relatedRoute && (
+        <aside class="editorial-card mt-10 rounded-[6px] p-6 sm:flex sm:items-center sm:justify-between sm:gap-8">
+          <div>
+            <span class="section-kicker">照着这篇走</span>
+            <h2 class="mt-2 font-serif text-2xl text-ink">{relatedRoute.shortTitle}</h2>
+            <p class="mt-2 text-sm leading-7 text-muted">{relatedRoute.distance} · {relatedRoute.duration} · {relatedRoute.stops.length} 个拍摄点</p>
+          </div>
+          <a class="mt-5 inline-block shrink-0 border-b border-line pb-1 text-sm text-accent hover:border-accent sm:mt-0" href={`/routes/${relatedRoute.slug}`}>查看路线 →</a>
+        </aside>
+      )}
 
       {(previous || next) && (
         <nav class="mt-12 flex flex-col gap-6 border-t border-line pt-7 sm:flex-row sm:items-start sm:justify-between">

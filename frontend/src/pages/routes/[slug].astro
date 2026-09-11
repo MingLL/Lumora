@@ -1,0 +1,115 @@
+---
+import SiteLayout from '@/layouts/SiteLayout.astro';
+import RouteSchematic from '@/components/RouteSchematic.astro';
+import { routes, type CityRoute } from '@/data/routes';
+import { coverPlaceholder } from '@/lib/image-meta.mjs';
+
+export function getStaticPaths() {
+  return routes.map((route) => ({ params: { slug: route.slug }, props: { route } }));
+}
+
+interface Props {
+  route: CityRoute;
+}
+
+const { route } = Astro.props;
+const coverStyle = await coverPlaceholder(route.cover);
+const updated = new Date(`${route.updatedAt}T00:00:00+08:00`);
+const jsonLd = [
+  {
+    '@context': 'https://schema.org',
+    '@type': 'BreadcrumbList',
+    itemListElement: [
+      { '@type': 'ListItem', position: 1, name: '首页', item: 'https://lumora.love/' },
+      { '@type': 'ListItem', position: 2, name: '城市摄影路线', item: 'https://lumora.love/routes' },
+      { '@type': 'ListItem', position: 3, name: route.shortTitle, item: `https://lumora.love/routes/${route.slug}` }
+    ]
+  },
+  {
+    '@context': 'https://schema.org',
+    '@type': 'ItemList',
+    name: route.title,
+    description: route.description,
+    numberOfItems: route.stops.length,
+    itemListElement: route.stops.map((stop, index) => ({
+      '@type': 'ListItem',
+      position: index + 1,
+      name: stop.name,
+      description: stop.tip
+    }))
+  }
+];
+---
+
+<SiteLayout title={route.title} description={route.description} image={route.cover} jsonLd={jsonLd}>
+  <article class="container-page pb-20 pt-9 md:pt-12">
+    <a class="font-mono text-[12.5px] tracking-[0.08em] text-faint hover:text-accent" href="/routes">← 返回城市摄影路线</a>
+
+    <header class="mt-10 grid items-end gap-9 lg:grid-cols-[1fr_0.72fr]">
+      <div>
+        <p class="section-kicker">{route.city} · {route.district} · PHOTO WALK</p>
+        <h1 class="mt-5 max-w-[13em] font-serif text-[2.6rem] leading-[1.3] text-ink text-balance md:text-[4rem]">{route.title}</h1>
+        <p class="mt-6 max-w-[42em] text-lg leading-8 text-muted">{route.description}</p>
+      </div>
+      <dl class="grid grid-cols-2 gap-x-6 gap-y-5 border-y border-line py-6 text-sm">
+        <div><dt class="font-mono text-[11px] tracking-[0.1em] text-faint">距离</dt><dd class="mt-1.5 text-ink">{route.distance}</dd></div>
+        <div><dt class="font-mono text-[11px] tracking-[0.1em] text-faint">用时</dt><dd class="mt-1.5 text-ink">{route.duration}</dd></div>
+        <div><dt class="font-mono text-[11px] tracking-[0.1em] text-faint">最佳时间</dt><dd class="mt-1.5 text-ink">{route.bestTime}</dd></div>
+        <div><dt class="font-mono text-[11px] tracking-[0.1em] text-faint">难度</dt><dd class="mt-1.5 text-ink">{route.difficulty}</dd></div>
+      </dl>
+    </header>
+
+    <figure class="mt-10">
+      <img class="aspect-[16/8] w-full rounded-[5px] object-cover" src={route.cover} alt={route.shortTitle} decoding="async" style={coverStyle} />
+    </figure>
+
+    <section class="mt-14 grid gap-9 lg:grid-cols-[0.7fr_1.3fr]">
+      <div>
+        <div class="sticky top-24">
+          <p class="section-kicker">ROUTE MAP</p>
+          <h2 class="mt-3 font-serif text-3xl text-ink">路线一览</h2>
+          <div class="mt-6"><RouteSchematic route={route} /></div>
+          <a class="focus-ring mt-5 flex items-center justify-center rounded-[5px] bg-accent px-5 py-3.5 text-sm text-white hover:opacity-90" href={route.startNavigationUrl} target="_blank" rel="noopener noreferrer">导航到天坛东门 ↗</a>
+          <p class="mt-3 text-xs leading-6 text-faint">导航由高德地图提供；无法调起 App 时会打开网页版。</p>
+        </div>
+      </div>
+
+      <div>
+        <p class="section-kicker">STOPS</p>
+        <h2 class="mt-3 font-serif text-3xl text-ink">沿途拍摄点</h2>
+        <ol class="mt-8 space-y-12">
+          {route.stops.map((stop, index) => (
+            <li id={`stop-${index + 1}`} class="scroll-mt-24">
+              <div class="flex items-baseline gap-4 border-t border-line pt-5">
+                <span class="font-mono text-sm text-accent">{String(index + 1).padStart(2, '0')}</span>
+                <div>
+                  <h3 class="font-serif text-2xl text-ink">{stop.name}</h3>
+                  <p class="mt-1 text-sm text-faint">{stop.subtitle}</p>
+                </div>
+              </div>
+              <img class="mt-5 aspect-[16/10] w-full rounded-[4px] object-cover" src={stop.photo} alt={stop.photoAlt} loading="lazy" decoding="async" />
+              <p class="mt-4 text-[16px] leading-8 text-prose">{stop.tip}</p>
+            </li>
+          ))}
+        </ol>
+      </div>
+    </section>
+
+    <section class="mx-auto mt-16 max-w-[760px] border-y border-line py-9">
+      <p class="section-kicker">BEFORE YOU GO</p>
+      <h2 class="mt-3 font-serif text-3xl text-ink">出发之前</h2>
+      <ul class="mt-6 space-y-4 text-[16px] leading-8 text-prose">
+        {route.notes.map((note) => <li class="flex gap-3"><span class="mt-[0.7em] h-1.5 w-1.5 shrink-0 rounded-full bg-accent"></span><span>{note}</span></li>)}
+      </ul>
+      <div class="mt-7 grid gap-3 text-sm text-muted sm:grid-cols-2">
+        <p><span class="text-faint">到达方式：</span>{route.transport}</p>
+        <p><span class="text-faint">推荐季节：</span>{route.season}</p>
+      </div>
+    </section>
+
+    <footer class="mx-auto mt-10 flex max-w-[760px] flex-wrap items-center justify-between gap-5">
+      <p class="font-mono text-xs text-faint"><time datetime={updated.toISOString()}>更新于 {route.updatedAt.replaceAll('-', '.')}</time></p>
+      <a class="border-b border-line pb-1 text-sm text-accent hover:border-accent" href={`/posts/${route.relatedPostId}`}>阅读这次扫街的完整周记 →</a>
+    </footer>
+  </article>
+</SiteLayout>

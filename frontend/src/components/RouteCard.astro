@@ -1,0 +1,31 @@
+---
+import type { CityRoute } from '@/data/routes';
+import { coverPlaceholder } from '@/lib/image-meta.mjs';
+
+interface Props {
+  route: CityRoute;
+}
+
+const { route } = Astro.props;
+const coverStyle = await coverPlaceholder(route.cover);
+---
+
+<a class="editorial-card group block overflow-hidden rounded-[6px] p-3 transition duration-300 hover:-translate-y-1 hover:shadow-soft" href={`/routes/${route.slug}`}>
+  <img
+    class="aspect-[16/10] w-full rounded-[3px] object-cover grayscale-[8%] transition duration-500 group-hover:grayscale-0"
+    src={route.cover}
+    alt={route.shortTitle}
+    decoding="async"
+    style={coverStyle}
+  />
+  <div class="p-3 pb-4 pt-5">
+    <div class="date-stamp">
+      <span>{route.city} · {route.district}</span>
+      <span>{route.distance}</span>
+      <span>{route.duration}</span>
+    </div>
+    <h2 class="mt-4 font-serif text-[1.55rem] leading-snug text-ink transition group-hover:text-accent">{route.shortTitle}</h2>
+    <p class="mt-3 leading-7 text-muted">{route.description}</p>
+    <span class="mt-5 inline-block border-b border-line pb-1 font-mono text-xs tracking-[0.06em] text-accent">查看完整路线 →</span>
+  </div>
+</a>

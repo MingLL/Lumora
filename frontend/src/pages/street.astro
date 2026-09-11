@@ -2,6 +2,8 @@
 import { getCollection } from 'astro:content';
 import SiteLayout from '@/layouts/SiteLayout.astro';
 import StreetPhotoGrid from '@/components/StreetPhotoGrid.astro';
+import RouteCard from '@/components/RouteCard.astro';
+import { routes } from '@/data/routes';
 
 const posts = (await getCollection('blog'))
   .filter((post) => post.data.series === '扫街周记' || post.data.category === '扫街周记')
@@ -18,5 +20,18 @@ const posts = (await getCollection('blog'))
     <div class="mt-10">
       <StreetPhotoGrid posts={posts} />
     </div>
+
+    {routes.length > 0 && (
+      <section class="mt-16 border-t border-line pt-10">
+        <div class="max-w-2xl">
+          <p class="section-kicker">照着路线走</p>
+          <h2 class="mt-3 font-serif text-3xl text-ink">把照片放回城市里</h2>
+          <p class="mt-4 leading-8 text-muted">从扫街周记里整理出的完整路线，包括行走顺序、拍摄点和现场经验。</p>
+        </div>
+        <div class="mt-7 max-w-[720px]">
+          <RouteCard route={routes[0]} />
+        </div>
+      </section>
+    )}
   </section>
 </SiteLayout>
