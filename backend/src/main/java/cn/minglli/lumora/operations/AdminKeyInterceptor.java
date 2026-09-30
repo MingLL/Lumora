@@ -3,10 +3,10 @@ package cn.minglli.lumora.operations;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
-import java.time.Instant;
+import java.time.Clock;
 import java.util.Base64;
+import java.util.HashMap;
 import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
 
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
@@ -16,7 +16,9 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import org.springframework.web.servlet.HandlerInterceptor;
 
@@ -28,12 +30,22 @@ public class AdminKeyInterceptor implements HandlerInterceptor {
     private static final long MAX_TIMESTAMP_DRIFT_SECONDS = 300;
     private static final long NONCE_TTL_SECONDS = 600;
 
+    static final int MAX_NONCES = 4096;
+    private static final int MAX_NONCE_LENGTH = 128;
+
+    private final Clock clock;
     private final byte[] expectedKey;
     private final byte[] hmacKey;
 
-    private final Map<String, Long> nonceStore = new ConcurrentHashMap<>();
+    private final Map<String, Long> nonceStore = new HashMap<>();
 
     public AdminKeyInterceptor(LumoraProperties properties) {
+        this(properties, Clock.systemUTC());
+    }
+
+    @Autowired
+    public AdminKeyInterceptor(LumoraProperties properties, Clock clock) {
+        this.clock = clock;
         this.expectedKey = properties.getReportAdminKey().getBytes(StandardCharsets.UTF_8);
         this.hmacKey = properties.getReportAdminKey().getBytes(StandardCharsets.UTF_8);
     }
@@ -76,8 +88,9 @@ public class AdminKeyInterceptor implements HandlerInterceptor {
         String timestampStr = request.getHeader("X-Lumora-Timestamp");
         String nonce = request.getHeader("X-Lumora-Nonce");
 
-        if (timestampStr == null || timestampStr.isBlank() || nonce == null || nonce.isBlank()) {
-            log.warn("Rejected HMAC request without timestamp or nonce path={} requestId={}",
+        if (timestampStr == null || timestampStr.isBlank() || nonce == null || nonce.isBlank()
+                || nonce.length() > MAX_NONCE_LENGTH) {
+            log.warn("Rejected HMAC request with missing timestamp or invalid nonce path={} requestId={}",
                     request.getRequestURI(), requestId);
             response.sendError(HttpStatus.BAD_REQUEST.value());
             return false;
@@ -93,17 +106,11 @@ public class AdminKeyInterceptor implements HandlerInterceptor {
             return false;
         }
 
-        long now = Instant.now().getEpochSecond();
-        if (Math.abs(now - timestamp) > MAX_TIMESTAMP_DRIFT_SECONDS) {
-            log.warn("Rejected HMAC request with drifted timestamp path={} requestId={} drift={}",
-                    request.getRequestURI(), requestId, Math.abs(now - timestamp));
-            response.sendError(HttpStatus.UNAUTHORIZED.value());
-            return false;
-        }
-
-        if (nonceStore.putIfAbsent(nonce, now + NONCE_TTL_SECONDS) != null) {
-            log.warn("Rejected HMAC request with replayed nonce path={} requestId={}",
-                    request.getRequestURI(), requestId);
+        long now = clock.instant().getEpochSecond();
+        if (timestamp < now - MAX_TIMESTAMP_DRIFT_SECONDS
+                || timestamp > now + MAX_TIMESTAMP_DRIFT_SECONDS) {
+            log.warn("Rejected HMAC request with drifted timestamp path={} requestId={} timestamp={}",
+                    request.getRequestURI(), requestId, timestamp);
             response.sendError(HttpStatus.UNAUTHORIZED.value());
             return false;
         }
@@ -119,11 +126,36 @@ public class AdminKeyInterceptor implements HandlerInterceptor {
             return false;
         }
 
-        cleanupExpiredNonces(now);
+        // Only authenticated requests may occupy cache space. Check and insert under
+        // one lock so concurrent copies of the same signed request cannot both pass.
+        int rejection = registerNonce(nonce, now);
+        if (rejection != 0) {
+            response.sendError(rejection);
+            return false;
+        }
         return true;
     }
 
-    private void cleanupExpiredNonces(long now) {
+    private synchronized int registerNonce(String nonce, long now) {
+        cleanupExpiredNonces();
+        if (nonceStore.containsKey(nonce)) {
+            return HttpStatus.UNAUTHORIZED.value();
+        }
+        if (nonceStore.size() >= MAX_NONCES) {
+            // Never evict a live nonce to make room: that would allow replay.
+            return HttpStatus.SERVICE_UNAVAILABLE.value();
+        }
+        nonceStore.put(nonce, now + NONCE_TTL_SECONDS);
+        return 0;
+    }
+
+    // Run independently of successful HMAC authentication (including when the
+    // dashboard uses only the plain admin key). Size remains bounded between sweeps.
+    @Scheduled(fixedDelay = 60_000)
+    synchronized void cleanupExpiredNonces() {
+        long now = clock.instant().getEpochSecond();
+        // Keep the boundary second: a timestamp 300s in the future remains valid
+        // exactly 600s after its first use.
         nonceStore.entrySet().removeIf(entry -> entry.getValue() < now);
     }
 

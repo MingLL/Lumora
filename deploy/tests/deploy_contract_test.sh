@@ -146,6 +146,31 @@ printf '\n--- 资源配置 ---\n'
 # 把它挪到了入口层清单 lumora-ingress.yaml，但这两条断言当时没跟着改，于是它们从那次
 # 提交起就一直是红的 —— 断言找不到目标时报的是「未配置」，看起来像配置真的丢了，
 # 掩盖了「测试自己找错了文件」。改成读入口层清单。
+# 旧 Ingress 必须仅匹配主域名的 HTTP，且只能跳转，不能另开后端通道。
+legacy_ingress=$(awk '
+  /^---$/ { target = 0 }
+  $0 == "kind: Ingress" { target = 1 }
+  target { print }
+' "$TEST_ROOT/deploy/k8s/lumora-backend.yaml")
+if printf '%s\n' "$legacy_ingress" | grep -qF '    - host: lumora.love' \
+  && printf '%s\n' "$legacy_ingress" | grep -qxF '    traefik.ingress.kubernetes.io/router.entrypoints: web' \
+  && printf '%s\n' "$legacy_ingress" | grep -qF 'router.middlewares: lumora-lumora-https-only@kubernetescrd'; then
+  ok "旧后端 Ingress 仅在主域名 HTTP 上跳转，不接受替代 Host 或 HTTPS"
+else
+  no "旧后端 Ingress 仍可能绕过正式路由的请求体限制"
+fi
+redirect_config=$(awk '
+  /^---$/ { target = 0 }
+  $0 == "  name: lumora-https-only" { target = 1 }
+  target { print }
+' "$TEST_ROOT/deploy/k8s/lumora-ingress.yaml")
+if printf '%s\n' "$redirect_config" | grep -qF '  redirectScheme:' \
+  && printf '%s\n' "$redirect_config" | grep -qF '    scheme: https'; then
+  ok "旧入口的中间件只执行 HTTPS 跳转"
+else
+  no "缺少旧入口的 HTTPS 跳转中间件"
+fi
+
 tls_resolver=$(
   awk '
     $0 == "kind: IngressRoute" { ingress_route = 1; next }

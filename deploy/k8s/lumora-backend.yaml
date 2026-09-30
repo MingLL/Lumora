@@ -35,18 +35,22 @@ spec:
       port: 8080
       targetPort: http
 ---
-# 只把回调路径放出去。前端那条 Ingress 匹配 `/`，Traefik 按规则长度定优先级，
-# 更长的 `/wechat/callback` 先命中，所以两条 Ingress 可以共存。
-# /internal/**、/actuator/** 都不在这里，公网访问不到。
+# 保留旧资源名以便 apply 原地收紧线上旧 Ingress，避免仅删除 YAML 留下孤儿。
+# 此入口只允许主域名 HTTP，并强制跳转；HTTPS 由 lumora-ingress.yaml 统一承载，
+# 不能再通过替代 Host 绕过那里的请求体限制。
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
   name: lumora-backend
   namespace: lumora
+  annotations:
+    traefik.ingress.kubernetes.io/router.entrypoints: web
+    traefik.ingress.kubernetes.io/router.middlewares: lumora-lumora-https-only@kubernetescrd
 spec:
   ingressClassName: traefik
   rules:
-    - http:
+    - host: lumora.love
+      http:
         paths:
           - path: /client-events
             pathType: Exact

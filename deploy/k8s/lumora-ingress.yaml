@@ -14,6 +14,17 @@
 #    对应的 www 路由后来被一次清理连带删掉，中间件成了孤儿 ——
 #    于是 www.lumora.love 有 DNS、有证书，访问却 404。2026-08-09 补回。
 ---
+# Legacy HTTP-only backend Ingress must redirect even without the global redirect.
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: lumora-https-only
+  namespace: lumora
+spec:
+  redirectScheme:
+    scheme: https
+    permanent: true
+---
 apiVersion: traefik.io/v1alpha1
 kind: Middleware
 metadata:
