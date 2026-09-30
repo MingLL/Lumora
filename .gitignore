@@ -26,3 +26,6 @@ reports/
 content/
 frontend/src/content/blog
 frontend/public/images
+
+# Statistics-site administrator network allowlist (local deployment configuration).
+deploy/analytics-allowed-ips.local

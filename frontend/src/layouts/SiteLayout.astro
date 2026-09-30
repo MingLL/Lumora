@@ -97,6 +97,8 @@ const serializedJsonLd = jsonLd ? JSON.stringify(jsonLd).replaceAll('<', '\\u003
       ↑
     </button>
     <script>
+      import { reportEvent } from '@/lib/client-events';
+      reportEvent('PAGE_OPEN', { browser: /MicroMessenger/i.test(navigator.userAgent) ? 'WECHAT' : 'OTHER' });
       const backTop = document.querySelector('[data-back-top]');
       backTop?.addEventListener('click', () => window.scrollTo({ top: 0, behavior: 'smooth' }));
     </script>

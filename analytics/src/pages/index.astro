@@ -1,0 +1,54 @@
+---
+import { loadArticleTitles } from '../lib/article-titles';
+const titles = await loadArticleTitles();
+---
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="robots" content="noindex,nofollow" />
+  <meta name="referrer" content="no-referrer" />
+  <title>访问统计 · 远方有温度</title>
+  <link rel="icon" href="/favicon.svg" />
+</head>
+<body>
+  <main class="dashboard" data-titles={JSON.stringify(titles)}>
+    <header><div><a href="https://lumora.love/">← 远方有温度</a><p class="eyebrow">SITE ANALYTICS</p><h1>每一次到访，都有来处。</h1><p class="muted">访问来源、阅读足迹与世界各地的相遇。</p></div><span class="badge">管理员 · 私密统计</span></header>
+    <form id="filters" class="panel filters">
+      <label>管理员密钥<input id="key" type="password" autocomplete="off" required placeholder="输入管理密钥" /></label>
+      <label>开始日期<input id="from" type="date" required /></label>
+      <label>结束日期<input id="to" type="date" required /></label>
+      <button type="submit" id="refresh">查看统计</button><button type="button" id="logout" class="secondary">清空</button>
+      <small>密钥仅用于本次页面，不保存在浏览器。日期与时间均为北京时间，最多查询 93 天。</small>
+    </form>
+    <p id="status" role="status" aria-live="polite">输入管理员密钥，查看最近 7 天的访问。</p>
+    <div id="results" hidden>
+      <section class="metrics" aria-label="访问概览">
+        <div class="panel"><span>页面浏览 PV</span><strong id="pv">0</strong></div>
+        <div class="panel"><span>独立 IP</span><strong id="ips">0</strong></div>
+        <div class="panel"><span>文章阅读</span><strong id="article-views">0</strong></div>
+        <div class="panel"><span>未记录 IP 的访问</span><strong id="unknown">0</strong></div>
+      </section>
+      <section class="panel"><div class="section-head"><h2>访客从哪里来</h2><span class="muted">世界分布 · 点击圆点查看访问</span></div>
+        <div class="map-wrap"><svg id="world-map" viewBox="0 0 1000 500" aria-label="访客 IP 地理分布地图"><image href="/maps/world-land.svg" width="1000" height="500" /><g id="map-points"></g></svg></div>
+        <p id="map-status" class="muted" aria-live="polite"></p><p class="muted">展示访问最多的前 100 个 IP。圆点按同一位置聚合，大小表示访问量；归属地为大致位置。地图数据：Natural Earth。</p>
+        <div id="map-detail"></div>
+      </section>
+      <section class="panel"><h2>每日访问趋势</h2><div id="trend" class="trend" aria-label="每日浏览量"></div></section>
+      <div class="columns">
+        <section class="panel"><h2>最受欢迎的文章 <small>前 100</small></h2><div class="table-wrap"><table><thead><tr><th>文章</th><th>阅读</th><th>IP</th></tr></thead><tbody id="articles"></tbody></table></div></section>
+        <section class="panel"><h2>来源网站 <small>前 100</small></h2><div class="table-wrap"><table><thead><tr><th>来源</th><th>浏览量</th></tr></thead><tbody id="sources"></tbody></table></div></section>
+      </div>
+      <section class="panel"><h2>访客足迹 <small>按访问量排序 · 前 100 个 IP</small></h2><p class="muted">点击 IP 查看该地址访问过的页面。同一 IP 可能对应多位访客。</p><div class="table-wrap"><table><thead><tr><th>IP</th><th>国家 / 地区 / 城市</th><th>浏览量</th><th>文章数</th><th>最近访问</th></tr></thead><tbody id="visitors"></tbody></table></div></section>
+      <section class="panel" id="visit-panel"><div class="section-head"><h2>访问明细</h2><form id="ip-filter"><input id="ip" placeholder="按 IP 筛选" aria-label="IP 地址" maxlength="45" /><button>筛选</button><button type="button" class="secondary" id="all-visits">全部访问</button></form></div><p id="visit-status" role="status"></p><div class="table-wrap"><table><thead><tr><th>访问时间</th><th>IP</th><th>页面 / 文章</th><th>来源网站</th></tr></thead><tbody id="visits"></tbody></table></div><div class="pagination"><button id="prev" class="secondary">上一页</button><span id="page-info"></span><button id="next" class="secondary">下一页</button></div></section>
+      <p class="muted">统计浏览器上报的页面打开事件；不包含静态资源请求或未执行脚本的访问。直接访问包含浏览器未提供来源的情况。历史缺失字段显示未知。</p>
+    </div>
+  </main>
+  <script src="../lib/analytics.ts"></script>
+</body>
+</html>
+<style>
+  *{box-sizing:border-box}body{margin:0}button,input{line-height:1.5}a{text-decoration:none}p{margin:0 0 12px}small{display:inline-block}svg{vertical-align:middle}
+  body{background:#f5f3ed;color:#283c36;font-family:system-ui,sans-serif}.dashboard{max-width:1320px;margin:auto;padding:36px 28px 70px}header,.section-head{display:flex;align-items:center;justify-content:space-between;gap:16px}header{margin-bottom:30px}a{color:#35685a}.eyebrow{font-size:11px;letter-spacing:.2em;margin:28px 0 10px}h1{font-family:serif;font-size:clamp(26px,4vw,40px);margin:0 0 10px}h2{font-size:18px;margin:0 0 18px}h2 small{font-size:12px;font-weight:normal;color:#718078}p{line-height:1.7}.muted,small{color:#718078;font-size:13px}.badge{border:1px solid #d4ded6;border-radius:30px;padding:9px 16px;white-space:nowrap;font-size:12px}.panel{border:1px solid #dce2d8;background:#fffef9;border-radius:14px;padding:24px;margin-bottom:22px}.filters{display:flex;flex-wrap:wrap;gap:16px;align-items:end}.filters label{display:grid;gap:8px;font-size:12px}.filters small{width:100%}input,button{border:1px solid #cbd7ce;border-radius:7px;padding:10px 12px;font:inherit;max-width:100%}input{background:white;color:#283c36}button{background:#315f50;color:white;cursor:pointer}button.secondary{color:#315f50;background:transparent}button:disabled{opacity:.45;cursor:default}button:focus-visible,a:focus-visible,input:focus-visible{outline:3px solid #cc9d5f;outline-offset:3px}.metrics{display:grid;grid-template-columns:repeat(4,1fr);gap:20px}.metrics span{font-size:13px;color:#718078}.metrics strong{display:block;font-size:38px;margin-top:12px;font-weight:500}.columns{display:grid;grid-template-columns:3fr 2fr;gap:22px}.table-wrap{overflow:auto;max-height:460px}table{width:100%;border-collapse:collapse;font-size:13px;text-align:left}th{font-weight:500;color:#718078;white-space:nowrap}th,.table-wrap :global(td){padding:12px 10px;border-bottom:1px solid #e8ece5}.table-wrap :global(td){overflow-wrap:anywhere;min-width:70px}.table-wrap :global(td:first-child){min-width:140px}.table-wrap :global(td button){background:none;border:0;padding:0;color:#35685a;text-align:left;text-decoration:underline}.map-wrap{background:#edf2ee;border-radius:10px;overflow:hidden}#world-map{width:100%;display:block}#map-points :global(circle){fill:#b87939;fill-opacity:.65;stroke:#fff;stroke-width:1.5;cursor:pointer}#map-points :global(circle:hover),#map-points :global(circle:focus){fill:#315f50;fill-opacity:.9}.trend{display:flex;gap:5px;height:170px;overflow-x:auto;align-items:end;padding-top:20px}.trend :global(.day){flex:1;min-width:25px;height:100%;display:flex;flex-direction:column;justify-content:end;align-items:center;font-size:10px;color:#718078;gap:5px}.trend :global(.bar){background:#698a77;width:70%;border-radius:4px 4px 0 0;min-height:2px}.pagination{display:flex;justify-content:center;gap:20px;align-items:center;margin-top:20px}#ip-filter{display:flex;flex-wrap:wrap;gap:8px}#map-detail :global(button){margin:5px}#status{min-height:28px} [hidden]{display:none!important}@media(max-width:760px){.dashboard{padding:24px 14px}.metrics{grid-template-columns:repeat(2,1fr);gap:10px}.columns{grid-template-columns:1fr;gap:0}.panel{padding:16px}header,.section-head{align-items:start;flex-direction:column}.badge{display:none}.filters label{flex:1;min-width:140px}.map-wrap{overflow:auto}#world-map{min-width:650px}}
+</style>

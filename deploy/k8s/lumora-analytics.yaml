@@ -1,0 +1,196 @@
+# Independent statistics site. deploy-analytics.sh renders hostname, hash and required IP allowlist.
+# Static files are isolated from /opt/lumora/site (the public blog).
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: lumora
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: lumora-analytics-nginx
+  namespace: lumora
+data:
+  default.conf: |
+    server {
+      listen 80 default_server;
+      server_name _;
+      root /usr/share/nginx/html;
+      index index.html;
+      server_tokens off;
+      charset utf-8;
+      add_header X-Robots-Tag "noindex, nofollow" always;
+      location /_astro/ {
+        add_header Cache-Control "public, max-age=31536000, immutable";
+        try_files $uri =404;
+      }
+      location ^~ /api/ { return 404; }
+      location / {
+        add_header Cache-Control "no-cache";
+        try_files $uri $uri/index.html $uri/ =404;
+      }
+    }
+---
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: lumora-analytics
+  namespace: lumora
+spec:
+  selector:
+    matchLabels:
+      app: lumora-analytics
+  updateStrategy:
+    type: RollingUpdate
+  template:
+    metadata:
+      labels:
+        app: lumora-analytics
+      annotations:
+        lumora/manifest-hash: "__MANIFEST_HASH__"
+    spec:
+      nodeSelector:
+        kubernetes.io/hostname: dev1
+      containers:
+        - name: nginx
+          image: public.ecr.aws/docker/library/nginx:1.29-alpine
+          ports:
+            - name: http
+              containerPort: 80
+          resources:
+            requests:
+              cpu: 10m
+              memory: 24Mi
+            limits:
+              cpu: 250m
+              memory: 64Mi
+          volumeMounts:
+            - name: site
+              mountPath: /usr/share/nginx/html
+              readOnly: true
+            - name: config
+              mountPath: /etc/nginx/conf.d/default.conf
+              subPath: default.conf
+              readOnly: true
+          readinessProbe:
+            httpGet:
+              path: /
+              port: http
+          livenessProbe:
+            httpGet:
+              path: /
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 30
+      volumes:
+        - name: site
+          hostPath:
+            path: /opt/lumora/analytics
+            type: Directory
+        - name: config
+          configMap:
+            name: lumora-analytics-nginx
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: lumora-analytics
+  namespace: lumora
+spec:
+  selector:
+    app: lumora-analytics
+  ports:
+    - name: http
+      port: 80
+      targetPort: http
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: lumora-analytics-ingress
+  namespace: lumora
+spec:
+  podSelector:
+    matchLabels:
+      app: lumora-analytics
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: traefik
+      ports:
+        - port: 80
+          protocol: TCP
+---
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: lumora-analytics-headers
+  namespace: lumora
+spec:
+  headers:
+    stsSeconds: 15552000
+    frameDeny: true
+    contentTypeNosniff: true
+    referrerPolicy: no-referrer
+    customResponseHeaders:
+      Server: ""
+      X-Robots-Tag: "noindex, nofollow"
+      Content-Security-Policy: >-
+        default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none';
+        form-action 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline';
+        script-src 'self'; connect-src 'self'
+      Permissions-Policy: "camera=(), microphone=(), geolocation=()"
+---
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: lumora-analytics-allowlist
+  namespace: lumora
+spec:
+  # Use the direct client address, not caller-supplied X-Forwarded-For.
+  # Current topology is Internet -> Traefik, with externalTrafficPolicy: Local.
+  ipAllowList:
+    sourceRange: __ANALYTICS_ALLOWED_IPS__
+---
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
+metadata:
+  name: lumora-analytics-tls
+  namespace: lumora
+spec:
+  entryPoints:
+    - websecure
+  routes:
+    - kind: Rule
+      match: >-
+        Host(`__ANALYTICS_HOST__`) && (Path(`/api/analytics/summary`)
+        || Path(`/api/analytics/visits`) || Path(`/api/analytics/location`))
+      priority: 250
+      middlewares:
+        - name: lumora-analytics-headers
+          namespace: lumora
+        - name: lumora-analytics-allowlist
+          namespace: lumora
+      services:
+        - name: lumora-backend-web
+          port: 8080
+    - kind: Rule
+      match: Host(`__ANALYTICS_HOST__`)
+      priority: 100
+      middlewares:
+        - name: lumora-analytics-headers
+          namespace: lumora
+        - name: lumora-analytics-allowlist
+          namespace: lumora
+      services:
+        - name: lumora-analytics
+          port: 80
+  tls:
+    certResolver: le-prod

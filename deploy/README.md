@@ -477,3 +477,11 @@ IDENTITY 序列正常接续（数据迁移脚本依赖这个行为）、重复�
 `uq_auto_report` 拦下、`varchar` 参数绑定不到 `jsonb` 列会被拒绝（证明 mapper
 里的显式 `::jsonb` 转换不能省）。这是在真实 DDL 上跑的验证，能在发布前而不是
 发布时抓住 SQL 语法或约束错误——新增或修改 Flyway 迁移时应该跑一次。
+
+## 独立统计站
+
+统计站使用独立域名（默认 `analytics.lumora.love`）、`analytics/` 前端和独立 nginx。
+先配置 DNS 指向 dev1，再按 [统计站说明](../analytics/README.md) 安装依赖并运行
+`./deploy/deploy-analytics.sh`。可以用 `ANALYTICS_HOST` 指定其他独立域名。
+该脚本只更新 `/opt/lumora/analytics` 和 `lumora-analytics` 资源，不更新主站静态文件。
+主站入口不暴露统计查询 API，统计域名提供同源查询。后端和数据库沿用现有服务。
