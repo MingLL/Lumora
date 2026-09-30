@@ -1,6 +1,9 @@
 package cn.minglli.lumora.event;
 
 import java.util.Map;
+import java.net.URI;
+import java.util.Locale;
+import jakarta.servlet.http.HttpServletRequest;
 
 import cn.minglli.lumora.operations.LogSanitizer;
 import cn.minglli.lumora.operations.SiteUrlValidator;
@@ -48,7 +51,7 @@ public class ClientEventController {
     }
 
     @PostMapping("/client-events")
-    public ResponseEntity<Void> report(@Valid @RequestBody ClientEventReport report) {
+    public ResponseEntity<Void> report(@Valid @RequestBody ClientEventReport report, HttpServletRequest request) {
         // 站外 URL 的事件只会污染访问分析，不收。
         if (!siteUrlValidator.isSiteUrl(report.url())) {
             log.warn("Rejected client event with off-site url={}", LogSanitizer.forLog(report.url()));
@@ -79,7 +82,7 @@ public class ClientEventController {
 
         try {
             mapper.insert(new ClientEventRecord(null, report.visitId(), report.type(), report.url(),
-                    propertiesJson, null, null));
+                    propertiesJson, null, null, clientIp(request), referrerHost(report.referrer())));
         } catch (RuntimeException exception) {
             // 客户端观测事件不能影响页面可用性。
             log.warn("Failed to persist client event type={} errorClass={}",
@@ -88,11 +91,34 @@ public class ClientEventController {
         return ResponseEntity.noContent().build();
     }
 
+    // The web service accepts traffic only from Traefik (NetworkPolicy); Traefik
+    // sanitizes forwarding headers. Never accept an IP supplied in the JSON body.
+    private static String clientIp(HttpServletRequest request) {
+        String forwarded = request.getHeader("X-Forwarded-For");
+        String ip = forwarded == null || forwarded.isBlank()
+                ? request.getRemoteAddr() : forwarded.split(",")[0].trim();
+        return ip != null && ip.length() <= 45 && ip.matches("[0-9a-fA-F:.]+") ? ip : null;
+    }
+
+    private static String referrerHost(String referrer) {
+        if (referrer == null) return null; // Older clients did not report referrers.
+        if (referrer.isBlank()) return "";
+        try {
+            URI uri = URI.create(referrer);
+            String scheme = uri.getScheme();
+            String host = uri.getHost();
+            if (("https".equalsIgnoreCase(scheme) || "http".equalsIgnoreCase(scheme))
+                    && host != null && host.length() <= 253) return host.toLowerCase(Locale.ROOT);
+        } catch (IllegalArgumentException ignored) { }
+        return null;
+    }
+
     public record ClientEventReport(
             // @Pattern 不管 null，所以 @NotBlank 还得留着。
             @NotBlank @Pattern(regexp = UUID_PATTERN) String visitId,
             @NotBlank @Size(max = 64) String type,
             @NotBlank @Size(max = SiteUrlValidator.MAX_URL_LENGTH) String url,
-            @NotNull Map<String, Object> properties) {
+            @NotNull Map<String, Object> properties,
+            @Size(max = 2048) String referrer) {
     }
 }

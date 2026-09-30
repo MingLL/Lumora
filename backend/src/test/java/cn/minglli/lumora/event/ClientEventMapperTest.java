@@ -16,9 +16,11 @@ class ClientEventMapperTest extends PostgresContainerTest {
     @Test
     void storesVisitTypeAndExtensibleProperties() {
         mapper.insert(new ClientEventRecord(null, "visit-1", "NETWORK_TYPE",
-                "https://lumora.love/", "{\"networkType\":\"wifi\"}", null, null));
+                "https://lumora.love/", "{\"networkType\":\"wifi\"}", null, null, "1.2.3.4", "example.com"));
         Map<String, Object> row = jdbcTemplate.queryForMap(
-                "SELECT visit_id, type, properties FROM client_event WHERE visit_id = ?", "visit-1");
+                "SELECT visit_id, type, properties, client_ip, referrer_host FROM client_event WHERE visit_id = ?", "visit-1");
+        assertThat(row.get("client_ip")).isEqualTo("1.2.3.4");
+        assertThat(row.get("referrer_host")).isEqualTo("example.com");
         assertThat(row.get("type")).isEqualTo("NETWORK_TYPE");
         assertThat(row.get("properties").toString()).contains("wifi");
     }

@@ -132,6 +132,10 @@ class DailyReportServiceTest extends PostgresContainerTest {
 
         insert(event("late2", EventType.SUBSCRIBE, "o50", null, null, null, "subscribe", false, IN_WINDOW, Instant.parse("2026-08-03T02:30:00Z")));
 
+        // Regeneration occurs after the late event has arrived, not at the
+        // original snapshot's fixed clock (02:00Z, before its 02:30Z receipt).
+        service = new DailyReportService(mapper,
+                Clock.fixed(Instant.parse("2026-08-03T03:00:00Z"), SHANGHAI), properties, objectMapper);
         DailyReportSnapshot regenerated = service.regenerateSnapshot();
 
         assertThat(regenerated.version()).isEqualTo(2);

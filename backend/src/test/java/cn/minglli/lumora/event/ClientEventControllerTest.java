@@ -37,6 +37,19 @@ class ClientEventControllerTest {
     }
 
     @Test
+    void capturesTrustedProxyIpAndOnlyReferrerHost() throws Exception {
+        mockMvc.perform(post("/client-events")
+                .header("X-Forwarded-For", "1.2.3.4, 10.0.0.1")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"visitId\":\"" + VISIT_ID + "\",\"type\":\"PAGE_OPEN\","
+                        + "\"url\":\"https://lumora.love/posts/one\",\"properties\":{\"browser\":\"OTHER\"},"
+                        + "\"referrer\":\"https://example.com/private?q=secret\"}"))
+                .andExpect(status().isNoContent());
+        verify(mapper).insert(argThat(record -> "1.2.3.4".equals(record.clientIp())
+                && "example.com".equals(record.referrerHost())));
+    }
+
+    @Test
     void acceptsExtensibleTypedEventAndPersistsJsonProperties() throws Exception {
         mockMvc.perform(post("/client-events")
                         .contentType(MediaType.APPLICATION_JSON)

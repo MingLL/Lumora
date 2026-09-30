@@ -113,7 +113,9 @@ class WechatEventRepositoryTest extends PostgresContainerTest {
                 "url", "varchar(2048)|NO|",
                 "properties", "jsonb|NO|DEFAULT '{}'::jsonb",
                 "received_at", "timestamptz(6)|NO|DEFAULT CURRENT_TIMESTAMP",
-                "created_at", "timestamptz(6)|NO|DEFAULT CURRENT_TIMESTAMP"));
+                "created_at", "timestamptz(6)|NO|DEFAULT CURRENT_TIMESTAMP",
+                "client_ip", "varchar(45)|YES|",
+                "referrer_host", "varchar(253)|YES|"));
 
         // MySQL's "ENGINE=InnoDB" + per-table utf8mb4_* collation don't have a PostgreSQL
         // analogue: there is one storage engine, and collation is a database/column property,
@@ -171,7 +173,8 @@ class WechatEventRepositoryTest extends PostgresContainerTest {
                 "client_event_pkey", "UNIQUE:id",
                 "ix_client_event_received_at", "NONUNIQUE:received_at",
                 "ix_client_event_type_received_at", "NONUNIQUE:type,received_at",
-                "ix_client_event_visit_id", "NONUNIQUE:visit_id"));
+                "ix_client_event_visit_id", "NONUNIQUE:visit_id",
+                "ix_client_event_ip_time", "NONUNIQUE:client_ip,received_at"));
 
         // MySQL 的前缀索引 url(255) 在 PostgreSQL 只能用表达式索引表达。断言它确实是
         // left(url, 255) 而不是整列 —— 整列 btree 对高熵多字节值会在 INSERT 时报

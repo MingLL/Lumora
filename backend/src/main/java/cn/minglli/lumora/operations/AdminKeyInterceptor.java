@@ -41,6 +41,13 @@ public class AdminKeyInterceptor implements HandlerInterceptor {
     @Override
     public boolean preHandle(HttpServletRequest request, HttpServletResponse response, Object handler)
             throws Exception {
+        if (request.getRequestURI() != null && request.getRequestURI().startsWith("/api/analytics/")) {
+            response.setHeader("Cache-Control", "no-store");
+        }
+        if (expectedKey.length == 0) {
+            response.sendError(HttpStatus.UNAUTHORIZED.value());
+            return false;
+        }
         String requestId = request.getHeader("X-Request-Id");
         if (requestId == null || requestId.isBlank()) {
             log.warn("Rejected internal request without X-Request-Id path={}", request.getRequestURI());

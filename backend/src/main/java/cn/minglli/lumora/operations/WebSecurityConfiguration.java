@@ -26,7 +26,7 @@ public class WebSecurityConfiguration implements WebMvcConfigurer {
 
     @Override
     public void addInterceptors(InterceptorRegistry registry) {
-        registry.addInterceptor(adminKeyInterceptor).addPathPatterns("/internal/**");
+        registry.addInterceptor(adminKeyInterceptor).addPathPatterns("/internal/**", "/api/analytics/**");
 
         registry.addInterceptor(jsapiRateLimitInterceptor)
                 .addPathPatterns("/wechat/callback/jsapi-signature",
